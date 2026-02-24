@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCart } from "@/hooks/use-cart";
 
@@ -17,7 +17,7 @@ type Product = {
 type Variant = {
   id: string;
   product_id: string;
-  sku: string; // kept for backend/cart reference, not shown
+  sku: string;
   size: string | null;
   price: number; // GST included
   active: boolean;
@@ -43,6 +43,10 @@ function sizeLabel(s?: string | null) {
   const t = (s ?? "").trim();
   return t.length ? t : "One size";
 }
+function clampQty(n: number) {
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(99, Math.floor(n)));
+}
 
 export default function ShopPage() {
   // Cart (Zustand)
@@ -64,9 +68,37 @@ export default function ShopPage() {
   // UI
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
+  const [qtyByProduct, setQtyByProduct] = useState<Record<string, number>>({});
   const [addedKey, setAddedKey] = useState<string | null>(null);
 
   const accentBtn = "bg-orange-500 hover:bg-orange-600";
+
+  // Category order (manual)
+  const CATEGORY_ORDER = [
+    "Training Tops",
+    "Senior Polos",
+    "Juniors Playing Shorts",
+    "Senior Playing Shorts",
+    "Ladies Shorts",
+    "Socks and Hats",
+    "Junior Playing Jerseys",
+    "Senior Playing Jerseys",
+    "Rain Jackets",
+    "Hoodies",
+    "Long Subs Jacket",
+  ];
+  const CATEGORY_INDEX = useMemo(
+    () => new Map(CATEGORY_ORDER.map((c, i) => [c, i])),
+    []
+  );
+
+  // For desktop scroll buttons (optional UX)
+  const catRowRef = useRef<HTMLDivElement | null>(null);
+  function scrollCats(dx: number) {
+    const el = catRowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dx, behavior: "smooth" });
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -121,15 +153,18 @@ export default function ShopPage() {
         .map((p) => ({ ...p, variants: byProductId.get(p.id) ?? [] }))
         .filter((p) => p.variants.length > 0);
 
-      // default selected variant per product (first one)
-      const defaults: Record<string, string> = {};
+      // default selections
+      const defaultsVar: Record<string, string> = {};
+      const defaultsQty: Record<string, number> = {};
       for (const p of joined) {
-        defaults[p.id] = p.variants[0]?.id ?? "";
+        defaultsVar[p.id] = p.variants[0]?.id ?? "";
+        defaultsQty[p.id] = 1;
       }
 
       if (mounted) {
         setProducts(joined);
-        setSelectedVariant(defaults);
+        setSelectedVariant(defaultsVar);
+        setQtyByProduct(defaultsQty);
         setLoading(false);
       }
     }
@@ -140,85 +175,60 @@ export default function ShopPage() {
     };
   }, []);
 
-  const CATEGORY_ORDER = [
-  "Training Tops",
-  "Senior Polos",
-  "Juniors Playing Shorts",
-  "Senior Playing Shorts",
-  "Ladies Shorts",
-  "Socks and Hats",
-  "Junior Playing Jerseys",
-  "Senior Playing Jerseys",
-  "Rain Jackets",
-  "Hoodies",
-  "Long Subs Jacket",
-];
+  // Categories list in your order (only those that exist)
+  const categories = useMemo(() => {
+    const existing = new Set(products.map((p) => safeLabel(p.category)));
+    const ordered = CATEGORY_ORDER.filter((c) => existing.has(c));
+    return ["All", ...ordered];
+  }, [products]);
 
-const CATEGORY_INDEX = new Map(
-  CATEGORY_ORDER.map((c, i) => [c, i])
-);
-
-const categories = useMemo(() => {
-  const existing = new Set(products.map((p) => safeLabel(p.category)));
-
-  const ordered = CATEGORY_ORDER.filter((c) => existing.has(c));
-
-  return ["All", ...ordered];
-}, [products]);
-
+  // Products sorted by your category order (even in All)
   const filteredProducts = useMemo(() => {
-  const sorted = [...products].sort((a, b) => {
-    const aCat = safeLabel(a.category);
-    const bCat = safeLabel(b.category);
+    const sorted = [...products].sort((a, b) => {
+      const aCat = safeLabel(a.category);
+      const bCat = safeLabel(b.category);
+      const aIndex = CATEGORY_INDEX.get(aCat) ?? 999;
+      const bIndex = CATEGORY_INDEX.get(bCat) ?? 999;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
 
-    const aIndex = CATEGORY_INDEX.get(aCat) ?? 999;
-    const bIndex = CATEGORY_INDEX.get(bCat) ?? 999;
-
-    if (aIndex !== bIndex) {
-      return aIndex - bIndex;
-    }
-
-    // Dentro de la misma categoría respeta sort_order
-    return (a.sort_order ?? 0) - (b.sort_order ?? 0);
-  });
-
-  if (activeCategory === "All") {
-    return sorted;
-  }
-
-  return sorted.filter(
-    (p) => safeLabel(p.category) === activeCategory
-  );
-}, [products, activeCategory]);
+    if (activeCategory === "All") return sorted;
+    return sorted.filter((p) => safeLabel(p.category) === activeCategory);
+  }, [products, activeCategory, CATEGORY_INDEX]);
 
   const cartCount = useMemo(() => items.reduce((acc, it) => acc + (it.qty || 0), 0), [items]);
   const subtotal = useMemo(
     () => items.reduce((acc, it) => acc + it.unit_price * it.qty, 0),
     [items]
   );
-  const gst = useMemo(() => subtotal * (1 / 11), [subtotal]);
+  const gst = useMemo(() => subtotal * (1 / 11), [subtotal]); // indicative
   const total = subtotal;
 
   function toggleExpand(productId: string) {
     setExpanded((prev) => ({ ...prev, [productId]: !prev[productId] }));
+    // keep qty sane
+    setQtyByProduct((prev) => ({ ...prev, [productId]: clampQty(prev[productId] ?? 1) }));
   }
 
   function handleAdd(product: ProductWithVariants) {
-    const variantId = selectedVariant[product.id];
-    const v = product.variants.find((x) => x.id === variantId) ?? product.variants[0];
-    if (!v) return;
+    const vId = selectedVariant[product.id] || product.variants[0]?.id;
+    const chosen = product.variants.find((v) => v.id === vId) ?? product.variants[0];
+    if (!chosen) return;
+
+    const qty = clampQty(qtyByProduct[product.id] ?? 1);
 
     addToCart({
-      variant_id: v.id,
+      variant_id: chosen.id,
       product_id: product.id,
-      sku: v.sku,
+      sku: chosen.sku,
       name: product.name,
-      size: v.size,
-      unit_price: v.price,
-      qty: 1,
+      size: chosen.size,
+      unit_price: chosen.price,
+      qty,
     });
 
-    const key = `${product.id}:${v.id}`;
+    const key = `${product.id}:${chosen.id}`;
     setAddedKey(key);
     window.setTimeout(() => setAddedKey(null), 700);
   }
@@ -233,14 +243,13 @@ const categories = useMemo(() => {
               <div className="text-[11px] font-bold tracking-wide text-gray-500">
                 NORTH COAST JUNIOR RUFC
               </div>
-              <h1 className="text-xl font-black tracking-tight text-gray-900">
-                Order Online
-              </h1>
+              <h1 className="text-xl font-black tracking-tight text-gray-900">Order Online</h1>
               <div className="mt-0.5 text-sm text-gray-600">
-                Tap a product → choose size → add
+                Tap a product → choose size → qty → add
               </div>
             </div>
 
+            {/* Cart button (only this, no floating icon) */}
             <button
               onClick={openCart}
               className={[
@@ -251,15 +260,42 @@ const categories = useMemo(() => {
             >
               <span className="text-base">🛒</span>
               <span className="hidden sm:inline">Cart</span>
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-                {cartCount}
-              </span>
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
             </button>
           </div>
 
           {/* Categories */}
           <div className="pb-3">
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* Desktop helpers (optional): arrows to scroll if needed */}
+            <div className="hidden md:flex items-center justify-between gap-2 pb-2">
+              <div className="text-xs font-bold text-gray-500">Categories</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => scrollCats(-260)}
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold hover:bg-gray-50"
+                  aria-label="Scroll categories left"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => scrollCats(260)}
+                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold hover:bg-gray-50"
+                  aria-label="Scroll categories right"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile: horizontal scroll. Desktop: wrap (mouse-friendly). */}
+            <div
+              ref={catRowRef}
+              className={[
+                "-mx-1 flex gap-2 px-1",
+                "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                "md:flex-wrap md:overflow-visible md:[scrollbar-width:auto] md:[&::-webkit-scrollbar]:auto",
+              ].join(" ")}
+            >
               {categories.map((c) => {
                 const active = c === activeCategory;
                 return (
@@ -283,7 +319,7 @@ const categories = useMemo(() => {
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-4xl px-4 py-6">
+      <div className="mx-auto max-w-4xl px-4 py-6 pb-24">
         {loading && (
           <div className="space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -319,7 +355,6 @@ const categories = useMemo(() => {
           </div>
         )}
 
-        {/* ✅ 1 tarjeta por renglón */}
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="space-y-4">
             {filteredProducts.map((p) => {
@@ -329,6 +364,8 @@ const categories = useMemo(() => {
               const fromPrice = Math.min(...p.variants.map((v) => v.price));
               const key = chosen ? `${p.id}:${chosen.id}` : null;
               const justAdded = key ? addedKey === key : false;
+
+              const qty = clampQty(qtyByProduct[p.id] ?? 1);
 
               return (
                 <div
@@ -358,15 +395,13 @@ const categories = useMemo(() => {
                     </span>
                   </div>
 
-                  {p.description && (
-                    <p className="mt-3 text-sm text-gray-600">{p.description}</p>
-                  )}
+                  {p.description && <p className="mt-3 text-sm text-gray-600">{p.description}</p>}
 
-                  {/* Select size accordion */}
+                  {/* Smaller “size” button */}
                   <button
                     onClick={() => toggleExpand(p.id)}
                     className={[
-                      "mt-4 w-full rounded-2xl border px-4 py-3 text-left text-sm font-extrabold transition",
+                      "mt-4 w-full rounded-xl border px-3 py-2 text-left text-sm font-extrabold transition",
                       isExpanded
                         ? "border-gray-300 bg-gray-50 text-gray-900"
                         : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
@@ -381,15 +416,12 @@ const categories = useMemo(() => {
                       </span>
                       <span className="text-gray-500">{isExpanded ? "▲" : "▼"}</span>
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      Prices include GST
-                    </div>
                   </button>
 
-                  {/* ✅ despliegue SOLO opciones de talles + botón fijo */}
+                  {/* Expanded panel */}
                   {isExpanded && (
                     <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4">
-                      {/* Size options (chips) */}
+                      {/* Size chips */}
                       <div className="flex flex-wrap gap-2">
                         {p.variants.map((v) => {
                           const active = (selectedVariant[p.id] || p.variants[0]?.id) === v.id;
@@ -412,15 +444,52 @@ const categories = useMemo(() => {
                         })}
                       </div>
 
-                      {/* Fixed add row */}
+                      {/* Qty + Price + Add (fixed row) */}
                       <div className="mt-4 flex items-center justify-between gap-3">
-                        <div className="text-sm">
-                          <div className="text-gray-500 text-xs font-bold">Price</div>
-                          <div className="text-gray-900 font-black">
+                        {/* Qty controls */}
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs font-bold text-gray-500 mr-1">Qty</div>
+
+                          <button
+                            onClick={() =>
+                              setQtyByProduct((prev) => ({
+                                ...prev,
+                                [p.id]: clampQty((prev[p.id] ?? 1) - 1),
+                              }))
+                            }
+                            className="h-10 w-10 rounded-full border border-gray-200 text-lg font-black hover:bg-gray-50 active:translate-y-px transition"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+
+                          <div className="min-w-8 text-center text-sm font-black text-gray-900">
+                            {qty}
+                          </div>
+
+                          <button
+                            onClick={() =>
+                              setQtyByProduct((prev) => ({
+                                ...prev,
+                                [p.id]: clampQty((prev[p.id] ?? 1) + 1),
+                              }))
+                            }
+                            className="h-10 w-10 rounded-full border border-gray-200 text-lg font-black hover:bg-gray-50 active:translate-y-px transition"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Price */}
+                        <div className="text-right">
+                          <div className="text-[11px] font-bold text-gray-500">Price</div>
+                          <div className="text-sm font-black text-gray-900">
                             {chosen ? money(chosen.price) : money(fromPrice)}
                           </div>
                         </div>
 
+                        {/* Add */}
                         <button
                           onClick={() => handleAdd(p)}
                           className={[
@@ -431,6 +500,8 @@ const categories = useMemo(() => {
                           {justAdded ? "Added ✓" : "+ Add"}
                         </button>
                       </div>
+
+                      <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
                     </div>
                   )}
                 </div>
@@ -439,19 +510,18 @@ const categories = useMemo(() => {
           </div>
         )}
       </div>
-
-      {/* Floating cart pill */}
-      <button
-        onClick={openCart}
-        className={[
-          "fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px",
-          accentBtn,
-        ].join(" ")}
-        aria-label="Open cart (floating)"
-      >
-        🛒 <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
-      </button>
-
+      {/* Floating cart pill (mobile only) */}
+        <button
+          onClick={openCart}
+          className={[
+            "fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px sm:hidden",
+            accentBtn,
+          ].join(" ")}
+          aria-label="Open cart (floating)"
+        >
+          🛒
+  <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
+</button>  
       {/* CART: Mobile bottom sheet + Desktop right drawer */}
       <div className={["fixed inset-0 z-50", isOpen ? "" : "pointer-events-none"].join(" ")}>
         <div
@@ -568,9 +638,7 @@ function CartContent(props: {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-black text-gray-900">{it.name}</div>
-                    <div className="truncate text-xs text-gray-500">
-                      {it.size ?? "One size"}
-                    </div>
+                    <div className="truncate text-xs text-gray-500">{it.size ?? "One size"}</div>
                   </div>
 
                   <button
