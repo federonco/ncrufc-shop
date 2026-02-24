@@ -363,86 +363,77 @@ export default function ShopPage() {
 
                   {/* ✅ Always-visible purchase row: Size (dropdown) + Qty + Price + Add */}
                   <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-center">
-                      {/* Size dropdown */}
-                      <div className="sm:col-span-4">
-                        <div className="text-[11px] font-bold text-gray-500">Size</div>
-                        <select
-                          value={vId}
-                          onChange={(e) =>
-                            setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
-                          }
-                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
-                        >
-                          {p.variants.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {sizeLabel(v.size)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="flex items-center gap-2">
+                    {/* Size */}
+                  <div className="min-w-[120px] flex-1">
+                    <select
+                      value={vId}
+                      onChange={(e) =>
+                        setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
+                      }
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
+                    >
+                      {p.variants.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {sizeLabel(v.size)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                      {/* Qty */}
-                      <div className="sm:col-span-4">
-                        <div className="text-[11px] font-bold text-gray-500">Qty</div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <button
-                            onClick={() =>
-                              setQtyByProduct((prev) => ({
-                                ...prev,
-                                [p.id]: clampQty((prev[p.id] ?? 1) - 1),
-                              }))
-                            }
-                            className="h-10 w-10 rounded-full border border-gray-200 text-lg font-black hover:bg-gray-50 active:translate-y-px transition"
-                            aria-label="Decrease quantity"
-                          >
-                            −
-                          </button>
+                  {/* Qty */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        setQtyByProduct((prev) => ({
+                          ...prev,
+                          [p.id]: clampQty((prev[p.id] ?? 1) - 1),
+                        }))
+                      }
+                      className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
+                      aria-label="Decrease quantity"
+                    >
+                      −
+                    </button>
 
-                          <div className="min-w-10 text-center text-sm font-black text-gray-900">
-                            {qty}
-                          </div>
+                    <div className="min-w-7 text-center text-sm font-black text-gray-900">
+                      {qty}
+                    </div>
 
-                          <button
-                            onClick={() =>
-                              setQtyByProduct((prev) => ({
-                                ...prev,
-                                [p.id]: clampQty((prev[p.id] ?? 1) + 1),
-                              }))
-                            }
-                            className="h-10 w-10 rounded-full border border-gray-200 text-lg font-black hover:bg-gray-50 active:translate-y-px transition"
-                            aria-label="Increase quantity"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
+                    <button
+                      onClick={() =>
+                        setQtyByProduct((prev) => ({
+                          ...prev,
+                          [p.id]: clampQty((prev[p.id] ?? 1) + 1),
+                        }))
+                      }
+                      className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
+                      aria-label="Increase quantity"
+                    >
+                      +
+                    </button>
+                  </div>
 
-                      {/* Price */}
-                            <div className="sm:col-span-2 sm:text-right">
-                              <div className="text-[11px] font-bold text-gray-500">Total</div>
-                              <div className="mt-1 text-sm font-black text-gray-900">
-                                {chosen
-                                  ? money(chosen.price * qty)
-                                  : money(fromPrice * qty)}
-                              </div>
-                              <div className="text-[11px] text-gray-500">
-                                {chosen ? money(chosen.price) : money(fromPrice)} each
-                              </div>
-                            </div>
+                  {/* Total */}
+                  <div className="w-[82px] text-right">
+                    <div className="text-xs font-black text-gray-900 leading-tight">
+                      {chosen ? money(chosen.price * qty) : money(fromPrice * qty)}
+                    </div>
+                    <div className="text-[11px] text-gray-500 leading-tight">
+                      total
+                    </div>
+                  </div>
 
-                      {/* Add */}
-                      <div className="sm:col-span-2 sm:text-right">
-                        <div className="text-[11px] font-bold text-transparent">.</div>
-                        <button
-                          onClick={() => handleAdd(p)}
-                          className={[
-                            "mt-1 w-full sm:w-auto rounded-full px-5 py-3 text-sm font-extrabold text-white transition active:translate-y-px",
-                            justAdded ? "bg-emerald-600" : accentBtn,
-                          ].join(" ")}
-                        >
-                          {justAdded ? "Added ✓" : "+ Add"}
-                        </button>
+                  {/* Add */}
+                  <button
+                    onClick={() => handleAdd(p)}
+                    className={[
+                      "shrink-0 rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
+                      justAdded ? "bg-emerald-600" : accentBtn,
+                    ].join(" ")}
+                  >
+                    {justAdded ? "✓" : "+ Add"}
+                  </button>
                       </div>
                     </div>
 
@@ -481,7 +472,7 @@ export default function ShopPage() {
         {/* Mobile bottom sheet */}
         <div
           className={[
-            "absolute bottom-0 left-0 right-0 max-h-[82vh] rounded-t-3xl bg-white shadow-2xl transition-transform sm:hidden",
+            "absolute bottom-0 left-0 right-0 max-h-[82vh] rounded-t-3xl bg-white shadow-2xl transition-transform",
             isOpen ? "translate-y-0" : "translate-y-full",
           ].join(" ")}
         >
@@ -502,7 +493,7 @@ export default function ShopPage() {
         {/* Desktop drawer */}
         <div
           className={[
-            "absolute right-0 top-0 hidden h-full w-[420px] max-w-[92vw] bg-white shadow-2xl transition-transform sm:block",
+            "hidden",
             isOpen ? "translate-x-0" : "translate-x-full",
           ].join(" ")}
         >
