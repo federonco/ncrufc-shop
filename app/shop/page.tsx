@@ -419,12 +419,17 @@ export default function ShopPage() {
                       </div>
 
                       {/* Price */}
-                      <div className="sm:col-span-2 sm:text-right">
-                        <div className="text-[11px] font-bold text-gray-500">Price</div>
-                        <div className="mt-1 text-sm font-black text-gray-900">
-                          {chosen ? money(chosen.price) : money(fromPrice)}
-                        </div>
-                      </div>
+                            <div className="sm:col-span-2 sm:text-right">
+                              <div className="text-[11px] font-bold text-gray-500">Total</div>
+                              <div className="mt-1 text-sm font-black text-gray-900">
+                                {chosen
+                                  ? money(chosen.price * qty)
+                                  : money(fromPrice * qty)}
+                              </div>
+                              <div className="text-[11px] text-gray-500">
+                                {chosen ? money(chosen.price) : money(fromPrice)} each
+                              </div>
+                            </div>
 
                       {/* Add */}
                       <div className="sm:col-span-2 sm:text-right">
