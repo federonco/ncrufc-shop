@@ -557,7 +557,9 @@ function CartContent(props: {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={onClear}
+              onClick={() => {
+                if (confirm("Clear the whole cart?")) onClear();
+              }}
               className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-bold hover:bg-gray-50 transition"
             >
               Clear
