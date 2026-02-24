@@ -363,78 +363,79 @@ export default function ShopPage() {
 
                   {/* ✅ Always-visible purchase row: Size (dropdown) + Qty + Price + Add */}
                   <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-                    <div className="flex items-center gap-2">
-                                        {/* Size */}
-                  <div className="min-w-[120px] flex-1">
-                    <select
-                      value={vId}
-                      onChange={(e) =>
-                        setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
-                      }
-                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
-                    >
-                      {p.variants.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {sizeLabel(v.size)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Qty */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() =>
-                        setQtyByProduct((prev) => ({
-                          ...prev,
-                          [p.id]: clampQty((prev[p.id] ?? 1) - 1),
-                        }))
-                      }
-                      className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
-                      aria-label="Decrease quantity"
-                    >
-                      −
-                    </button>
-
-                    <div className="min-w-7 text-center text-sm font-black text-gray-900">
-                      {qty}
+                    <div className="grid gap-2 sm:flex sm:items-center sm:gap-2">
+                    {/* Size */}
+                    <div className="min-w-0 sm:min-w-[160px] sm:flex-1">
+                      <select
+                        value={vId}
+                        onChange={(e) =>
+                          setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
+                      >
+                        {p.variants.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {sizeLabel(v.size)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <button
-                      onClick={() =>
-                        setQtyByProduct((prev) => ({
-                          ...prev,
-                          [p.id]: clampQty((prev[p.id] ?? 1) + 1),
-                        }))
-                      }
-                      className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
-                      aria-label="Increase quantity"
-                    >
-                      +
-                    </button>
-                  </div>
+                    {/* Row 2 on mobile: Qty + Total + Add */}
+                    <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-2">
+                      {/* Qty */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() =>
+                            setQtyByProduct((prev) => ({
+                              ...prev,
+                              [p.id]: clampQty((prev[p.id] ?? 1) - 1),
+                            }))
+                          }
+                          className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
+                          aria-label="Decrease quantity"
+                        >
+                          −
+                        </button>
 
-                  {/* Total */}
-                  <div className="w-[82px] text-right">
-                    <div className="text-xs font-black text-gray-900 leading-tight">
-                      {chosen ? money(chosen.price * qty) : money(fromPrice * qty)}
-                    </div>
-                    <div className="text-[11px] text-gray-500 leading-tight">
-                      total
-                    </div>
-                  </div>
+                        <div className="min-w-7 text-center text-sm font-black text-gray-900">
+                          {qty}
+                        </div>
 
-                  {/* Add */}
-                  <button
-                    onClick={() => handleAdd(p)}
-                    className={[
-                      "shrink-0 rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
-                      justAdded ? "bg-emerald-600" : accentBtn,
-                    ].join(" ")}
-                  >
-                    {justAdded ? "✓" : "+ Add"}
-                  </button>
+                        <button
+                          onClick={() =>
+                            setQtyByProduct((prev) => ({
+                              ...prev,
+                              [p.id]: clampQty((prev[p.id] ?? 1) + 1),
+                            }))
+                          }
+                          className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
                       </div>
+
+                      {/* Total */}
+                      <div className="text-right sm:w-[82px]">
+                        <div className="text-xs font-black text-gray-900 leading-tight">
+                          {chosen ? money(chosen.price * qty) : money(fromPrice * qty)}
+                        </div>
+                        <div className="text-[11px] text-gray-500 leading-tight">total</div>
+                      </div>
+
+                      {/* Add */}
+                      <button
+                        onClick={() => handleAdd(p)}
+                        className={[
+                          "shrink-0 rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
+                          justAdded ? "bg-emerald-600" : accentBtn,
+                        ].join(" ")}
+                      >
+                        {justAdded ? "✓" : "+ Add"}
+                      </button>
+                    </div>
+                  </div>
                     
 
                     <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
