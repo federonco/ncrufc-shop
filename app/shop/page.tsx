@@ -66,7 +66,6 @@ export default function ShopPage() {
   const [activeCategory, setActiveCategory] = useState<string>("All");
 
   // UI
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
   const [qtyByProduct, setQtyByProduct] = useState<Record<string, number>>({});
   const [addedKey, setAddedKey] = useState<string | null>(null);
@@ -92,13 +91,7 @@ export default function ShopPage() {
     []
   );
 
-  // For desktop scroll buttons (optional UX)
   const catRowRef = useRef<HTMLDivElement | null>(null);
-  function scrollCats(dx: number) {
-    const el = catRowRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dx, behavior: "smooth" });
-  }
 
   useEffect(() => {
     let mounted = true;
@@ -153,7 +146,7 @@ export default function ShopPage() {
         .map((p) => ({ ...p, variants: byProductId.get(p.id) ?? [] }))
         .filter((p) => p.variants.length > 0);
 
-      // default selections
+      // defaults
       const defaultsVar: Record<string, string> = {};
       const defaultsQty: Record<string, number> = {};
       for (const p of joined) {
@@ -175,7 +168,7 @@ export default function ShopPage() {
     };
   }, []);
 
-  // Categories list in your order (only those that exist)
+  // Categories in your order (only those that exist)
   const categories = useMemo(() => {
     const existing = new Set(products.map((p) => safeLabel(p.category)));
     const ordered = CATEGORY_ORDER.filter((c) => existing.has(c));
@@ -205,12 +198,6 @@ export default function ShopPage() {
   const gst = useMemo(() => subtotal * (1 / 11), [subtotal]); // indicative
   const total = subtotal;
 
-  function toggleExpand(productId: string) {
-    setExpanded((prev) => ({ ...prev, [productId]: !prev[productId] }));
-    // keep qty sane
-    setQtyByProduct((prev) => ({ ...prev, [productId]: clampQty(prev[productId] ?? 1) }));
-  }
-
   function handleAdd(product: ProductWithVariants) {
     const vId = selectedVariant[product.id] || product.variants[0]?.id;
     const chosen = product.variants.find((v) => v.id === vId) ?? product.variants[0];
@@ -221,7 +208,7 @@ export default function ShopPage() {
     addToCart({
       variant_id: chosen.id,
       product_id: product.id,
-      sku: chosen.sku,
+      sku: chosen.sku, // not shown to user
       name: product.name,
       size: chosen.size,
       unit_price: chosen.price,
@@ -245,11 +232,11 @@ export default function ShopPage() {
               </div>
               <h1 className="text-xl font-black tracking-tight text-gray-900">Order Online</h1>
               <div className="mt-0.5 text-sm text-gray-600">
-                Tap a product → choose size → qty → add
+                Pick size → qty → add to cart
               </div>
             </div>
 
-            {/* Cart button (only this, no floating icon) */}
+            {/* Cart button */}
             <button
               onClick={openCart}
               className={[
@@ -264,36 +251,14 @@ export default function ShopPage() {
             </button>
           </div>
 
-          {/* Categories */}
+          {/* Categories: mobile scroll + desktop wrap. (No arrows) */}
           <div className="pb-3">
-            {/* Desktop helpers (optional): arrows to scroll if needed */}
-            <div className="hidden md:flex items-center justify-between gap-2 pb-2">
-              <div className="text-xs font-bold text-gray-500">Categories</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => scrollCats(-260)}
-                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold hover:bg-gray-50"
-                  aria-label="Scroll categories left"
-                >
-                  ◀
-                </button>
-                <button
-                  onClick={() => scrollCats(260)}
-                  className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-bold hover:bg-gray-50"
-                  aria-label="Scroll categories right"
-                >
-                  ▶
-                </button>
-              </div>
-            </div>
-
-            {/* Mobile: horizontal scroll. Desktop: wrap (mouse-friendly). */}
             <div
               ref={catRowRef}
               className={[
                 "-mx-1 flex gap-2 px-1",
                 "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-                "md:flex-wrap md:overflow-visible md:[scrollbar-width:auto] md:[&::-webkit-scrollbar]:auto",
+                "md:flex-wrap md:overflow-visible",
               ].join(" ")}
             >
               {categories.map((c) => {
@@ -318,7 +283,7 @@ export default function ShopPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content (pb-24 so floating cart doesn't cover last item) */}
       <div className="mx-auto max-w-4xl px-4 py-6 pb-24">
         {loading && (
           <div className="space-y-4">
@@ -358,7 +323,6 @@ export default function ShopPage() {
         {!loading && !error && filteredProducts.length > 0 && (
           <div className="space-y-4">
             {filteredProducts.map((p) => {
-              const isExpanded = !!expanded[p.id];
               const vId = selectedVariant[p.id] || p.variants[0]?.id;
               const chosen = p.variants.find((v) => v.id === vId) ?? p.variants[0];
               const fromPrice = Math.min(...p.variants.map((v) => v.price));
@@ -397,59 +361,31 @@ export default function ShopPage() {
 
                   {p.description && <p className="mt-3 text-sm text-gray-600">{p.description}</p>}
 
-                  {/* Smaller “size” button */}
-                  <button
-                    onClick={() => toggleExpand(p.id)}
-                    className={[
-                      "mt-4 w-full rounded-xl border px-3 py-2 text-left text-sm font-extrabold transition",
-                      isExpanded
-                        ? "border-gray-300 bg-gray-50 text-gray-900"
-                        : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>
-                        Size:{" "}
-                        <span className="font-black">
-                          {chosen ? sizeLabel(chosen.size) : "Select"}
-                        </span>
-                      </span>
-                      <span className="text-gray-500">{isExpanded ? "▲" : "▼"}</span>
-                    </div>
-                  </button>
-
-                  {/* Expanded panel */}
-                  {isExpanded && (
-                    <div className="mt-3 rounded-2xl border border-gray-100 bg-white p-4">
-                      {/* Size chips */}
-                      <div className="flex flex-wrap gap-2">
-                        {p.variants.map((v) => {
-                          const active = (selectedVariant[p.id] || p.variants[0]?.id) === v.id;
-                          return (
-                            <button
-                              key={v.id}
-                              onClick={() =>
-                                setSelectedVariant((prev) => ({ ...prev, [p.id]: v.id }))
-                              }
-                              className={[
-                                "rounded-full px-3 py-2 text-sm font-extrabold transition border",
-                                active
-                                  ? "bg-gray-900 text-white border-gray-900"
-                                  : "bg-white text-gray-900 border-gray-200 hover:bg-gray-50",
-                              ].join(" ")}
-                            >
+                  {/* ✅ Always-visible purchase row: Size (dropdown) + Qty + Price + Add */}
+                  <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-center">
+                      {/* Size dropdown */}
+                      <div className="sm:col-span-4">
+                        <div className="text-[11px] font-bold text-gray-500">Size</div>
+                        <select
+                          value={vId}
+                          onChange={(e) =>
+                            setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
+                          }
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
+                        >
+                          {p.variants.map((v) => (
+                            <option key={v.id} value={v.id}>
                               {sizeLabel(v.size)}
-                            </button>
-                          );
-                        })}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      {/* Qty + Price + Add (fixed row) */}
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        {/* Qty controls */}
-                        <div className="flex items-center gap-2">
-                          <div className="text-xs font-bold text-gray-500 mr-1">Qty</div>
-
+                      {/* Qty */}
+                      <div className="sm:col-span-4">
+                        <div className="text-[11px] font-bold text-gray-500">Qty</div>
+                        <div className="mt-1 flex items-center gap-2">
                           <button
                             onClick={() =>
                               setQtyByProduct((prev) => ({
@@ -463,7 +399,7 @@ export default function ShopPage() {
                             −
                           </button>
 
-                          <div className="min-w-8 text-center text-sm font-black text-gray-900">
+                          <div className="min-w-10 text-center text-sm font-black text-gray-900">
                             {qty}
                           </div>
 
@@ -480,48 +416,53 @@ export default function ShopPage() {
                             +
                           </button>
                         </div>
+                      </div>
 
-                        {/* Price */}
-                        <div className="text-right">
-                          <div className="text-[11px] font-bold text-gray-500">Price</div>
-                          <div className="text-sm font-black text-gray-900">
-                            {chosen ? money(chosen.price) : money(fromPrice)}
-                          </div>
+                      {/* Price */}
+                      <div className="sm:col-span-2 sm:text-right">
+                        <div className="text-[11px] font-bold text-gray-500">Price</div>
+                        <div className="mt-1 text-sm font-black text-gray-900">
+                          {chosen ? money(chosen.price) : money(fromPrice)}
                         </div>
+                      </div>
 
-                        {/* Add */}
+                      {/* Add */}
+                      <div className="sm:col-span-2 sm:text-right">
+                        <div className="text-[11px] font-bold text-transparent">.</div>
                         <button
                           onClick={() => handleAdd(p)}
                           className={[
-                            "rounded-full px-5 py-3 text-sm font-extrabold text-white transition active:translate-y-px",
+                            "mt-1 w-full sm:w-auto rounded-full px-5 py-3 text-sm font-extrabold text-white transition active:translate-y-px",
                             justAdded ? "bg-emerald-600" : accentBtn,
                           ].join(" ")}
                         >
                           {justAdded ? "Added ✓" : "+ Add"}
                         </button>
                       </div>
-
-                      <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
                     </div>
-                  )}
+
+                    <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-      {/* Floating cart pill (mobile only) */}
-        <button
-          onClick={openCart}
-          className={[
-            "fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px sm:hidden",
-            accentBtn,
-          ].join(" ")}
-          aria-label="Open cart (floating)"
-        >
-          🛒
-  <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
-</button>  
+
+      {/* Floating cart pill (mobile) */}
+      <button
+        onClick={openCart}
+        className={[
+          "fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px sm:hidden",
+          accentBtn,
+        ].join(" ")}
+        aria-label="Open cart (floating)"
+      >
+        🛒
+        <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
+      </button>
+
       {/* CART: Mobile bottom sheet + Desktop right drawer */}
       <div className={["fixed inset-0 z-50", isOpen ? "" : "pointer-events-none"].join(" ")}>
         <div
