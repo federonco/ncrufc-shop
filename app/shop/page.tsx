@@ -364,7 +364,7 @@ export default function ShopPage() {
                   {/* ✅ Always-visible purchase row: Size (dropdown) + Qty + Price + Add */}
                   <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
                     <div className="flex items-center gap-2">
-                    {/* Size */}
+                                        {/* Size */}
                   <div className="min-w-[120px] flex-1">
                     <select
                       value={vId}
@@ -435,7 +435,7 @@ export default function ShopPage() {
                     {justAdded ? "✓" : "+ Add"}
                   </button>
                       </div>
-                    </div>
+                    
 
                     <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
                   </div>
