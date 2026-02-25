@@ -144,11 +144,10 @@ export async function GET(req: Request) {
     doc.text(`Total: ${money(totalAmount)}`, MARGIN, doc.y);
     doc.text(`Orders: ${rows.length}`, MARGIN, doc.y + ROW_HEIGHT);
 
-    doc.end();
-
     const pdf = await new Promise<Buffer>((resolve, reject) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
+      doc.end();
     });
 
     const filename = `Orders (${monthLabel}).pdf`;

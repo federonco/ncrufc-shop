@@ -74,6 +74,13 @@ export default function AdminPage() {
   const [confirmingCancelOrder, setConfirmingCancelOrder] = useState<string | null>(null);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openSections, setOpenSections] = useState({
+    unpaid: true,
+    stock: true,
+    orders: true,
+  });
+  const toggleSection = (key: "unpaid" | "stock" | "orders") =>
+    setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   const loadStock = useCallback(async () => {
     setStockLoading(true);
@@ -265,14 +272,26 @@ export default function AdminPage() {
           )}
         </section>
 
-        {/* Unpaid orders dashboard */}
-        {orders.filter((o) => !o.paid_at && o.status !== "cancelled").length > 0 && (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 shadow-md">
-            <h2 className="text-lg font-black text-amber-800">Unpaid orders</h2>
-            <p className="mt-1 text-sm text-amber-700">
+        {/* Unpaid Orders (collapsible) */}
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection("unpaid")}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition"
+          >
+            <h2 className="text-lg font-black text-amber-800">Unpaid Orders</h2>
+            <span className="text-2xl text-gray-400">{openSections.unpaid ? "−" : "+"}</span>
+          </button>
+          {openSections.unpaid && (
+          <div className="border-t border-amber-100 bg-amber-50/70 p-6">
+            {orders.filter((o) => !o.paid_at && o.status !== "cancelled").length === 0 ? (
+              <p className="text-amber-700">No unpaid orders.</p>
+            ) : (
+            <>
+            <p className="mb-4 text-sm text-amber-700">
               Confirm payment received and mark as paid.
             </p>
-            <div className="mt-4 space-y-3">
+            <div className="space-y-3">
               {orders
                 .filter((o) => !o.paid_at && o.status !== "cancelled")
                 .map((o) => (
@@ -323,12 +342,24 @@ export default function AdminPage() {
                   </div>
                 ))}
             </div>
-          </section>
-        )}
+            </>
+            )}
+          </div>
+          )}
+        </section>
 
-        {/* Stock */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-md">
-          <h2 className="text-lg font-black text-gray-900">Stock</h2>
+        {/* Stock (collapsible) */}
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection("stock")}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition"
+          >
+            <h2 className="text-lg font-black text-gray-900">Stock</h2>
+            <span className="text-2xl text-gray-400">{openSections.stock ? "−" : "+"}</span>
+          </button>
+          {openSections.stock && (
+          <div className="border-t border-gray-100 p-6">
           <div className="mt-3 flex flex-wrap items-center gap-4">
             <select
               value={stockCategory}
@@ -417,11 +448,22 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+          </div>
+          )}
         </section>
 
-        {/* Orders */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-md">
-          <h2 className="text-lg font-black text-gray-900">Orders</h2>
+        {/* Orders Records (collapsible) */}
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection("orders")}
+            className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition"
+          >
+            <h2 className="text-lg font-black text-gray-900">Orders Records</h2>
+            <span className="text-2xl text-gray-400">{openSections.orders ? "−" : "+"}</span>
+          </button>
+          {openSections.orders && (
+          <div className="border-t border-gray-100 p-6">
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <input
               type="month"
@@ -527,6 +569,8 @@ export default function AdminPage() {
                 <div className="text-gray-500">No orders for this month.</div>
               )}
             </div>
+          )}
+          </div>
           )}
         </section>
       </main>
