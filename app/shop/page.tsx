@@ -516,15 +516,17 @@ export default function ShopPage() {
   );
 }
 
+type CartItemForContent = {
+  variant_id: string;
+  sku: string;
+  name: string;
+  size?: string | null;
+  unit_price: number;
+  qty: number;
+};
+
 function CartContent(props: {
-  items: Array<{
-    variant_id: string;
-    sku: string;
-    name: string;
-    size?: string | null;
-    unit_price: number;
-    qty: number;
-  }>;
+  items: CartItemForContent[];
   cartCount: number;
   subtotal: number;
   gst: number;
@@ -538,8 +540,52 @@ function CartContent(props: {
   const { items, cartCount, subtotal, gst, total, accentBtn, onClose, onClear, onRemove, onSetQty } =
     props;
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
+  const [isPlacing, setIsPlacing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successRef, setSuccessRef] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (items.length === 0) setSuccessRef(null);
+  }, [items.length]);
+
+  async function placeOrder() {
+    setError(null);
+    if (items.length === 0) return setError("Your cart is empty.");
+    if (!name.trim()) return setError("Please enter your name.");
+    if (!email.trim()) return setError("Please enter your email.");
+    setIsPlacing(true);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer: { name: name.trim(), email: email.trim(), phone: phone.trim() || null },
+          notes: notes.trim() || null,
+          items: items.map((it) => ({
+            variant_id: it.variant_id,
+            qty: it.qty,
+            product_name: it.name,
+            size: it.size ?? null,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Order failed");
+      setSuccessRef(data.reference ?? "NCR-XXXX");
+      onClear();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Order failed");
+    } finally {
+      setIsPlacing(false);
+    }
+  }
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="border-b px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -566,7 +612,7 @@ function CartContent(props: {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-4">
+      <div className="flex-1 min-h-0 overflow-auto px-4 py-4">
         {items.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-gray-700">
             Empty cart. Add items from the shop.
@@ -636,20 +682,91 @@ function CartContent(props: {
           </div>
         </div>
 
-        <button
-          disabled={items.length === 0}
-          className={[
-            "mt-3 w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px",
-            items.length === 0 ? "bg-gray-300 cursor-not-allowed" : accentBtn,
-          ].join(" ")}
-          onClick={() => alert("Next step: create order + send email ✅")}
-        >
-          Checkout
-        </button>
-
-        <div className="mt-2 text-xs text-gray-500">
-          Prices include GST. Final amounts are calculated on order creation.
-        </div>
+        {successRef ? (
+          <div className="mt-4 rounded-2xl bg-black/5 p-4">
+            <div className="font-black">Order sent ✅</div>
+            <div className="mt-1 text-sm">
+              Reference: <b>{successRef}</b>
+            </div>
+            <div className="mt-2 text-sm text-gray-600">Pickup at the next training session.</div>
+            <button
+              onClick={onClose}
+              className="mt-3 w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px bg-gray-900"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-4 grid gap-3">
+              <div>
+                <label className="text-xs font-bold text-gray-600">Name *</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="Your name"
+                  autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600">Email *</label>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="you@email.com"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600">Phone (optional)</label>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  type="tel"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="04xx xxx xxx"
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600">Notes (optional)</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="Sizes, comments..."
+                  rows={2}
+                />
+              </div>
+              {error && <div className="text-sm text-red-600">{error}</div>}
+              <button
+                onClick={placeOrder}
+                disabled={items.length === 0 || isPlacing}
+                className={[
+                  "w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px disabled:opacity-50",
+                  items.length === 0 ? "bg-gray-300 cursor-not-allowed" : accentBtn,
+                ].join(" ")}
+              >
+                {isPlacing ? "Placing order..." : "Place order"}
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm("Clear the whole cart?")) onClear();
+                }}
+                disabled={items.length === 0 || isPlacing}
+                className="w-full rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-700 disabled:opacity-50"
+              >
+                Clear cart
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              Prices include GST. Final amounts are calculated on order creation.
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

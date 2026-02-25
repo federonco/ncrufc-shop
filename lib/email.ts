@@ -1,5 +1,3 @@
-console.log("SMTP_USER exists?", !!process.env.SMTP_USER);
-console.log("SMTP_PASS exists?", !!process.env.SMTP_PASS);
 import nodemailer from "nodemailer";
 
 function getRecipients() {
@@ -14,8 +12,8 @@ export async function sendOrderEmail(params: {
   subject: string;
   html: string;
 }) {
-  const user = process.env.SMTP_USER!;
-  const pass = process.env.SMTP_PASS!;
+  const user = process.env.SMTP_USER ?? "";
+  const pass = process.env.SMTP_PASS ?? "";
   const to = getRecipients();
 
   if (!user || !pass) throw new Error("Missing SMTP_USER / SMTP_PASS");
