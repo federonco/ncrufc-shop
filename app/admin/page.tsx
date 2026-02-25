@@ -383,17 +383,17 @@ export default function AdminPage() {
                           />
                         </div>
                         {/* Content below */}
-                        <div className="p-3 space-y-2">
-                          <div className="font-black text-gray-900 text-sm">{prod.name}</div>
-                          <div className="text-xs text-gray-500">{cat.category}{prod.subcategory ? ` · ${prod.subcategory}` : ""}</div>
-                          <div className="overflow-x-auto -mx-3 px-3">
-                            <table className="w-full min-w-[280px] text-sm">
+                        <div className="min-w-0 p-3 space-y-2">
+                          <div className="font-black text-gray-900 text-sm truncate">{prod.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{cat.category}{prod.subcategory ? ` · ${prod.subcategory}` : ""}</div>
+                          <div className="overflow-x-auto -mx-3 px-3 min-w-0">
+                            <table className="w-full min-w-[220px] text-xs sm:text-sm">
                               <thead>
-                                <tr className="text-left text-gray-500 text-xs">
-                                  <th className="py-1 pr-2">Size</th>
-                                  <th className="py-1 pr-2 hidden sm:table-cell">SKU</th>
-                                  <th className="py-1 pr-2">Stock</th>
-                                  <th className="py-1 pr-2">Price</th>
+                                <tr className="text-left text-gray-500">
+                                  <th className="py-1 pr-1">Size</th>
+                                  <th className="py-1 pr-1 hidden sm:table-cell">SKU</th>
+                                  <th className="py-1 pr-1">Stock</th>
+                                  <th className="py-1 pr-1">Price</th>
                                   <th className="py-1">Save</th>
                                 </tr>
                               </thead>
@@ -429,32 +429,13 @@ export default function AdminPage() {
               onChange={(e) => setOrdersMonth(e.target.value)}
               className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-orange-300 focus:ring-2 focus:ring-orange-100 focus:outline-none transition"
             />
-            <button
-              type="button"
-              className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition ${accentBtn}`}
-              onClick={async () => {
-                const [y, m] = ordersMonth.split("-").map(Number);
-                const url = `/api/admin/orders-monthly-pdf?year=${y}&month=${m}`;
-                try {
-                  const res = await fetch(url);
-                  if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    throw new Error(data?.error ?? "Failed to generate PDF");
-                  }
-                  const blob = await res.blob();
-                  const blobUrl = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = blobUrl;
-                  a.download = `orders-${y}-${String(m).padStart(2, "0")}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(blobUrl);
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Failed to generate PDF");
-                }
-              }}
+            <a
+              href={`/api/admin/orders-monthly-pdf?year=${ordersMonth.slice(0, 4)}&month=${parseInt(ordersMonth.slice(5, 7), 10)}`}
+              download={`Orders (${new Date(parseInt(ordersMonth.slice(0, 4), 10), parseInt(ordersMonth.slice(5, 7), 10) - 1).toLocaleString("en", { month: "long", year: "numeric" }) }).pdf`}
+              className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition inline-block ${accentBtn}`}
             >
               Download PDF
-            </button>
+            </a>
           </div>
           {ordersLoading ? (
             <div className="mt-6 text-gray-500">Loading…</div>
@@ -751,15 +732,15 @@ function InlineVariantRow({
 
   return (
     <tr>
-      <td className="py-2 pr-2">{variant.size ?? "—"}</td>
-      <td className="py-2 pr-2 font-mono text-xs hidden sm:table-cell">{variant.sku || "—"}</td>
-      <td className="py-2 pr-2">
-        <div className="flex items-center gap-1">
+      <td className="py-1.5 pr-1">{variant.size ?? "—"}</td>
+      <td className="py-1.5 pr-1 font-mono text-[10px] hidden sm:table-cell truncate">{variant.sku || "—"}</td>
+      <td className="py-1.5 pr-1">
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={decrementStock}
             disabled={updating}
-            className="h-8 w-8 shrink-0 rounded-full border border-gray-200 text-center text-lg leading-none hover:bg-gray-100 hover:border-gray-300 disabled:opacity-50 transition"
+            className="h-7 w-7 shrink-0 rounded-full border border-gray-200 text-center text-sm leading-none hover:bg-gray-100 disabled:opacity-50"
             aria-label="Decrease stock"
           >
             −
@@ -770,20 +751,20 @@ function InlineVariantRow({
             value={stockVal}
             onChange={(e) => setStockVal(Math.max(0, parseInt(e.target.value, 10) || 0))}
             disabled={updating}
-            className="w-14 rounded border border-gray-200 px-1 py-1 text-right text-sm"
+            className="w-10 rounded border border-gray-200 px-0.5 py-0.5 text-right text-xs"
           />
           <button
             type="button"
             onClick={incrementStock}
             disabled={updating}
-            className="h-8 w-8 shrink-0 rounded-full border border-gray-200 text-center text-lg leading-none hover:bg-gray-100 hover:border-gray-300 disabled:opacity-50 transition"
+            className="h-7 w-7 shrink-0 rounded-full border border-gray-200 text-center text-sm leading-none hover:bg-gray-100 disabled:opacity-50"
             aria-label="Increase stock"
           >
             +
           </button>
         </div>
       </td>
-      <td className="py-2 pr-2">
+      <td className="py-1.5 pr-1">
         <input
           type="number"
           min={0}
@@ -791,15 +772,15 @@ function InlineVariantRow({
           value={priceVal}
           onChange={(e) => setPriceVal(e.target.value)}
           disabled={updating}
-          className="w-20 rounded border border-gray-200 px-2 py-1 text-right text-sm"
+          className="w-14 rounded border border-gray-200 px-1 py-0.5 text-right text-xs"
         />
       </td>
-      <td className="py-2">
+      <td className="py-1.5">
         <button
           type="button"
           onClick={handleSave}
           disabled={updating || !hasChanges}
-          className="rounded-lg bg-orange-500 px-3 py-1 text-xs font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition active:translate-y-px"
+          className="rounded bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {updating ? "…" : "Save"}
         </button>

@@ -109,6 +109,7 @@ export default function ShopPage() {
   const removeItem = useCart((s) => s.remove);
   const setQty = useCart((s) => s.setQty);
   const clear = useCart((s) => s.clear);
+  const clearItems = useCart((s) => s.clearItems);
 
   // Data
   const [loading, setLoading] = useState(true);
@@ -301,6 +302,9 @@ export default function ShopPage() {
       size: chosen.size,
       unit_price: chosen.price,
       qty,
+      image_path: product.image_path ?? null,
+      image_alt: product.image_alt ?? null,
+      updated_at: product.updated_at ?? null,
     });
 
     const key = `${product.id}:${chosen.id}`;
@@ -327,6 +331,7 @@ export default function ShopPage() {
             <div className="flex items-center gap-2">
               <Link
                 href="/admin"
+                prefetch={false}
                 className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-700 shadow-sm transition hover:bg-gray-50 active:translate-y-px"
                 aria-label="Admin"
               >
@@ -561,8 +566,8 @@ export default function ShopPage() {
         <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
       </button>
 
-      {/* CART: Mobile bottom sheet + Desktop right drawer */}
-      <div className={["fixed inset-0 z-50", isOpen ? "" : "pointer-events-none"].join(" ")}>
+      {/* CART: Centered modal (mobile + desktop) */}
+      <div className={["fixed inset-0 z-50 flex items-center justify-center p-4", isOpen ? "" : "pointer-events-none"].join(" ")}>
         <div
           onClick={closeCart}
           className={[
@@ -570,14 +575,13 @@ export default function ShopPage() {
             isOpen ? "opacity-100" : "opacity-0",
           ].join(" ")}
         />
-
-        {/* Mobile bottom sheet: max-h 85dvh, internal scroll, safe area */}
         <div
           className={[
-            "absolute bottom-0 left-0 right-0 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform",
-            "h-[85dvh] pb-[env(safe-area-inset-bottom,0px)]",
-            isOpen ? "translate-y-0" : "translate-y-full",
+            "relative flex w-full max-w-[480px] h-[85dvh] max-h-[85dvh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl transition-all",
+            "pb-[env(safe-area-inset-bottom,0px)]",
+            isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0",
           ].join(" ")}
+          onClick={(e) => e.stopPropagation()}
         >
           <CartContent
             items={items}
@@ -588,27 +592,7 @@ export default function ShopPage() {
             accentBtn={accentBtn}
             onClose={closeCart}
             onClear={clear}
-            onRemove={removeItem}
-            onSetQty={setQty}
-          />
-        </div>
-
-        {/* Desktop drawer */}
-        <div
-          className={[
-            "hidden",
-            isOpen ? "translate-x-0" : "translate-x-full",
-          ].join(" ")}
-        >
-          <CartContent
-            items={items}
-            cartCount={cartCount}
-            subtotal={subtotal}
-            gst={gst}
-            total={total}
-            accentBtn={accentBtn}
-            onClose={closeCart}
-            onClear={clear}
+            onClearItems={clearItems}
             onRemove={removeItem}
             onSetQty={setQty}
           />
@@ -625,6 +609,9 @@ type CartItemForContent = {
   size?: string | null;
   unit_price: number;
   qty: number;
+  image_path?: string | null;
+  image_alt?: string | null;
+  updated_at?: string | null;
 };
 
 function CartContent(props: {
@@ -636,10 +623,11 @@ function CartContent(props: {
   accentBtn: string;
   onClose: () => void;
   onClear: () => void;
+  onClearItems: () => void;
   onRemove: (variant_id: string) => void;
   onSetQty: (variant_id: string, qty: number) => void;
 }) {
-  const { items, cartCount, subtotal, gst, total, accentBtn, onClose, onClear, onRemove, onSetQty } =
+  const { items, cartCount, subtotal, gst, total, accentBtn, onClose, onClear, onClearItems, onRemove, onSetQty } =
     props;
 
   const [name, setName] = useState("");
@@ -650,9 +638,7 @@ function CartContent(props: {
   const [error, setError] = useState<string | null>(null);
   const [successRef, setSuccessRef] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (items.length === 0) setSuccessRef(null);
-  }, [items.length]);
+  /* Don't clear successRef when cart empties - we want to show confirmation modal. Only clear on Close. */
 
   async function placeOrder() {
     setError(null);
@@ -678,13 +664,21 @@ function CartContent(props: {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Order failed");
       setSuccessRef(data.reference ?? "NCR-XXXX");
-      onClear();
+      onClearItems();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Order failed");
     } finally {
       setIsPlacing(false);
     }
   }
+
+  const previewItem = items.find((it) => it.image_path?.trim());
+  const previewUrl = previewItem
+    ? getProductImageUrl(
+        previewItem.image_path!,
+        previewItem.updated_at ? new Date(previewItem.updated_at).getTime() : undefined
+      )
+    : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -693,10 +687,10 @@ function CartContent(props: {
         <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white p-6">
           <div className="max-w-sm text-center">
             <h2 className="text-xl font-black text-gray-900">
-              Thank you for your order!
+              Order confirmed
             </h2>
             <p className="mt-4 text-base text-gray-600">
-              Your order will be ready for collection at the next training session.
+              Your order has been received. It will be ready for collection at the next training session.
             </p>
             <p className="mt-4 text-lg font-black text-gray-900">
               Reference: {successRef}
@@ -714,7 +708,19 @@ function CartContent(props: {
         </div>
       )}
 
-      <div className="shrink-0 border-b px-4 py-4">
+      {previewUrl && (
+        <div className="shrink-0 relative h-[min(70dvh,320px)] bg-gray-100">
+          <Image
+            src={previewUrl}
+            alt={previewItem?.image_alt?.trim() || previewItem?.name || "Product"}
+            fill
+            className="object-contain"
+            sizes="480px"
+          />
+        </div>
+      )}
+
+      <div className="shrink-0 border-b px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-bold text-gray-500">Your cart</div>

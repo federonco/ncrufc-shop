@@ -11,6 +11,9 @@ export type CartItem = {
   size?: string | null;
   unit_price: number; // GST included (as per your DB)
   qty: number;
+  image_path?: string | null;
+  image_alt?: string | null;
+  updated_at?: string | null;
 };
 
 type CartState = {
@@ -24,6 +27,7 @@ type CartState = {
   remove: (variant_id: string) => void;
   setQty: (variant_id: string, qty: number) => void;
   clear: () => void;
+  clearItems: () => void;
 };
 
 export const useCart = create<CartState>((set, get) => ({
@@ -66,4 +70,5 @@ export const useCart = create<CartState>((set, get) => ({
   },
 
   clear: () => set({ items: [], isOpen: false }),
+  clearItems: () => set({ items: [] }),
 }));
