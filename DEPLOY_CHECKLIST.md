@@ -131,3 +131,55 @@ Then verify:
 - [ ] Admin image upload works
 - [ ] Monthly PDF generation works
 - [ ] No 405/500 on critical routes
+
+---
+
+## F) Admin authentication (HTTP Basic Auth)
+
+### Flow
+
+1. User visits `/admin` or `/api/admin/*`.
+2. Middleware checks `Authorization: Basic` header.
+3. If missing → 401 with `WWW-Authenticate: Basic realm="NCRUFC Admin"`.
+4. Browser prompts for username/password.
+5. On retry: middleware decodes credentials, fetches user from Supabase `admin_users`, compares password with bcrypt-edge.
+6. If valid and `active=true` → allow. Else → 401.
+
+### Protected routes
+
+- `/admin`, `/admin/*`
+- `/api/admin/*` (including product-image, orders-monthly-pdf)
+
+### Seeding bcrypt users
+
+Run the migration:
+
+```bash
+npx supabase db push
+# or: psql -f supabase/migrations/005_admin_users.sql
+```
+
+Migration `005_admin_users.sql` inserts:
+- `admin` / `436449`
+- `NCRUFC` / `shoponline`
+
+To add users manually (from project root):
+
+```bash
+node -e "
+const bcrypt = require('bcrypt');
+bcrypt.hash('YOUR_PASSWORD', 10).then(h => 
+  console.log(\"INSERT INTO admin_users (username, password_hash) VALUES ('username', '\" + h + \"');\")
+);
+"
+```
+
+Then run the generated SQL in Supabase SQL Editor.
+
+### Testing checklist
+
+- [ ] **Admin login**: Visit /admin → prompted for credentials → admin/436449 or NCRUFC/shoponline → access granted.
+- [ ] **Invalid credentials**: Wrong password → 401, no access.
+- [ ] **Checkout modal**: Place order → full-screen confirmation with "Thank you for your order!" and reference → Close → cart closes.
+- [ ] **Mobile zoom**: Focus on Name/Email/Phone inputs → no zoom (inputs use text-base / 16px).
+- [ ] **Route protection**: /api/admin/orders without Basic auth → 401.

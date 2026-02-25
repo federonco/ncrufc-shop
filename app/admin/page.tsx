@@ -365,45 +365,49 @@ export default function AdminPage() {
                 .map((cat) => (
                 <div key={cat.category}>
                   <h3 className="font-bold text-gray-700">{cat.category}</h3>
-                  <div className="mt-2 space-y-3">
+                  <div className="mt-2 space-y-4">
                     {cat.products.map((prod) => (
                       <div
                         key={prod.id}
-                        className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow transition"
+                        className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm hover:shadow transition"
                       >
-                        <div className="flex flex-wrap items-start gap-3">
+                        {/* Image at top - fixed height */}
+                        <div className="h-[150px] bg-gray-100 shrink-0">
                           <ProductImageUpload
                             productId={prod.id}
                             productName={prod.name}
                             imagePath={prod.image_path}
                             onSuccess={loadStock}
                             onError={setError}
+                            compact
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="font-black text-gray-900">{prod.name}</div>
-                            <div className="mt-2 overflow-x-auto">
-                              <table className="w-full min-w-[400px] text-sm">
-                                <thead>
-                                  <tr className="text-left text-gray-500">
-                                    <th className="py-1 pr-2">Size</th>
-                                    <th className="py-1 pr-2">SKU</th>
-                                    <th className="py-1 pr-2">Stock</th>
-                                    <th className="py-1 pr-2">Price</th>
-                                    <th className="py-1">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {prod.variants.map((v) => (
-                                    <InlineVariantRow
-                                      key={v.id}
-                                      variant={v}
-                                      onUpdate={updateVariant}
-                                      updating={updatingVariant === v.id}
-                                    />
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                        </div>
+                        {/* Content below */}
+                        <div className="p-3 space-y-2">
+                          <div className="font-black text-gray-900 text-sm">{prod.name}</div>
+                          <div className="text-xs text-gray-500">{cat.category}{prod.subcategory ? ` · ${prod.subcategory}` : ""}</div>
+                          <div className="overflow-x-auto -mx-3 px-3">
+                            <table className="w-full min-w-[280px] text-sm">
+                              <thead>
+                                <tr className="text-left text-gray-500 text-xs">
+                                  <th className="py-1 pr-2">Size</th>
+                                  <th className="py-1 pr-2 hidden sm:table-cell">SKU</th>
+                                  <th className="py-1 pr-2">Stock</th>
+                                  <th className="py-1 pr-2">Price</th>
+                                  <th className="py-1">Save</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {prod.variants.map((v) => (
+                                  <InlineVariantRow
+                                    key={v.id}
+                                    variant={v}
+                                    onUpdate={updateVariant}
+                                    updating={updatingVariant === v.id}
+                                  />
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
                       </div>
@@ -555,12 +559,14 @@ function ProductImageUpload({
   imagePath,
   onSuccess,
   onError,
+  compact = false,
 }: {
   productId: string;
   productName: string;
   imagePath: string | null;
   onSuccess: () => void;
   onError: (msg: string) => void;
+  compact?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -634,15 +640,47 @@ function ProductImageUpload({
     return (a + b).toUpperCase();
   }
 
+  if (compact) {
+    return (
+      <div className="relative h-full w-full">
+        {imageUrl ? (
+          <img src={imageUrl} alt={productName} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-2xl font-black text-gray-400">
+            {initials(productName)}
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2 right-2 flex flex-wrap justify-center gap-1.5">
+          <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} className="hidden" />
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading || removing}
+            className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow hover:bg-orange-600 disabled:opacity-50"
+          >
+            {uploading ? "…" : imageUrl ? "Replace" : "Upload"}
+          </button>
+          {imageUrl && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={uploading || removing}
+              className="rounded-lg border border-red-200 bg-white px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              Remove
+            </button>
+          )}
+          {msg && <span className="text-[10px] text-emerald-600">{msg}</span>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex shrink-0 flex-col items-center gap-2">
       <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-gray-200 bg-gray-100 shadow-inner">
         {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={productName}
-            className="h-full w-full object-cover"
-          />
+          <img src={imageUrl} alt={productName} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-lg font-black text-gray-400">
             {initials(productName)}
@@ -650,13 +688,7 @@ function ProductImageUpload({
         )}
       </div>
       <div className="flex flex-wrap justify-center gap-1.5">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={handleFile}
-          className="hidden"
-        />
+        <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} className="hidden" />
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -676,9 +708,7 @@ function ProductImageUpload({
           </button>
         )}
       </div>
-      {msg && (
-        <span className="text-[10px] text-emerald-600">{msg}</span>
-      )}
+      {msg && <span className="text-[10px] text-emerald-600">{msg}</span>}
       <span className="text-[9px] text-gray-400">Tip: upload webp for best quality/size</span>
     </div>
   );
@@ -722,7 +752,7 @@ function InlineVariantRow({
   return (
     <tr>
       <td className="py-2 pr-2">{variant.size ?? "—"}</td>
-      <td className="py-2 pr-2 font-mono text-xs">{variant.sku || "—"}</td>
+      <td className="py-2 pr-2 font-mono text-xs hidden sm:table-cell">{variant.sku || "—"}</td>
       <td className="py-2 pr-2">
         <div className="flex items-center gap-1">
           <button

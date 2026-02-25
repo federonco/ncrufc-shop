@@ -571,11 +571,11 @@ export default function ShopPage() {
           ].join(" ")}
         />
 
-        {/* Mobile bottom sheet: fixed height for internal scroll + safe area */}
+        {/* Mobile bottom sheet: max-h 85dvh, internal scroll, safe area */}
         <div
           className={[
-            "absolute bottom-0 left-0 right-0 flex h-[82vh] max-h-[82vh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform",
-            "pb-[env(safe-area-inset-bottom,0px)]",
+            "absolute bottom-0 left-0 right-0 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform",
+            "h-[85dvh] pb-[env(safe-area-inset-bottom,0px)]",
             isOpen ? "translate-y-0" : "translate-y-full",
           ].join(" ")}
         >
@@ -688,6 +688,32 @@ function CartContent(props: {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Full-screen confirmation modal after successful checkout */}
+      {successRef && (
+        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white p-6">
+          <div className="max-w-sm text-center">
+            <h2 className="text-xl font-black text-gray-900">
+              Thank you for your order!
+            </h2>
+            <p className="mt-4 text-base text-gray-600">
+              Your order will be ready for collection at the next training session.
+            </p>
+            <p className="mt-4 text-lg font-black text-gray-900">
+              Reference: {successRef}
+            </p>
+            <button
+              onClick={() => {
+                setSuccessRef(null);
+                onClose();
+              }}
+              className="mt-8 w-full rounded-2xl bg-gray-900 px-4 py-3 font-black text-white transition active:translate-y-px"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="shrink-0 border-b px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -779,21 +805,7 @@ function CartContent(props: {
           Pickup at the next training session, paying on card only.
         </p>
 
-        {successRef ? (
-          <div className="mt-4 rounded-2xl bg-black/5 p-4">
-            <div className="font-black">Order sent ✅</div>
-            <div className="mt-1 text-sm">
-              Reference: <b>{successRef}</b>
-            </div>
-            <div className="mt-2 text-sm text-gray-600">Pickup at the next training session, paying on card only.</div>
-            <button
-              onClick={onClose}
-              className="mt-3 w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px bg-gray-900"
-            >
-              Done
-            </button>
-          </div>
-        ) : (
+        {successRef ? null : (
           <>
             <div className="mt-4 grid gap-3">
               <div>
@@ -801,7 +813,7 @@ function CartContent(props: {
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-base"
                   placeholder="Your name"
                   autoComplete="name"
                 />
@@ -812,7 +824,7 @@ function CartContent(props: {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
-                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-base"
                   placeholder="you@email.com"
                   autoComplete="email"
                 />
@@ -823,7 +835,7 @@ function CartContent(props: {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   type="tel"
-                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-base"
                   placeholder="04xx xxx xxx"
                   autoComplete="tel"
                 />
@@ -833,7 +845,7 @@ function CartContent(props: {
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="mt-0.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-base"
                   placeholder="Sizes, comments..."
                   rows={2}
                 />
