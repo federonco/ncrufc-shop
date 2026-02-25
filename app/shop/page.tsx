@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
+import { getProductImageUrl } from "@/lib/product-image";
 import { useCart } from "@/hooks/use-cart";
 
 type Product = {
@@ -12,6 +15,9 @@ type Product = {
   description: string | null;
   sort_order: number | null;
   active: boolean;
+  image_path: string | null;
+  image_alt: string | null;
+  updated_at?: string | null;
 };
 
 type Variant = {
@@ -48,6 +54,51 @@ function clampQty(n: number) {
   return Math.max(1, Math.min(99, Math.floor(n)));
 }
 
+function ProductImage({
+  imagePath,
+  imageAlt,
+  name,
+  updatedAt,
+  size = 48,
+}: {
+  imagePath: string | null | undefined;
+  imageAlt?: string | null;
+  name: string;
+  updatedAt?: string | null;
+  size?: number;
+}) {
+  const version = updatedAt ? new Date(updatedAt).getTime() : undefined;
+  const url = imagePath ? getProductImageUrl(imagePath, version) : null;
+
+  if (!url) {
+    return (
+      <div
+        className="shrink-0 grid place-items-center rounded-2xl bg-gray-900 text-sm font-extrabold text-white"
+        style={{ width: size, height: size }}
+      >
+        {initials(name)}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative shrink-0 overflow-hidden rounded-2xl bg-gray-100"
+      style={{ width: size, height: size }}
+    >
+      <Image
+        src={url}
+        alt={imageAlt?.trim() || name}
+        width={size}
+        height={size}
+        className="object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+  );
+}
+
 export default function ShopPage() {
   // Cart (Zustand)
   const isOpen = useCart((s) => s.isOpen);
@@ -71,6 +122,13 @@ export default function ShopPage() {
   const [addedKey, setAddedKey] = useState<string | null>(null);
 
   const accentBtn = "bg-orange-500 hover:bg-orange-600";
+
+  useEffect(() => {
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   // Category order (manual)
   const CATEGORY_ORDER = [
@@ -99,10 +157,10 @@ export default function ShopPage() {
     async function load() {
       setLoading(true);
       setError(null);
-
+      try {
       const pRes = await supabase
         .from("products")
-        .select("id,category,subcategory,name,description,sort_order,active")
+        .select("id,category,subcategory,name,description,sort_order,active,image_path,image_alt,updated_at")
         .eq("active", true)
         .order("category", { ascending: true })
         .order("subcategory", { ascending: true })
@@ -111,7 +169,16 @@ export default function ShopPage() {
 
       if (pRes.error) {
         if (mounted) {
-          setError(pRes.error.message);
+          const msg = pRes.error.message;
+          const isFetchFailed =
+            msg?.includes("Failed to fetch") ||
+            msg?.includes("fetch") ||
+            msg?.includes("NetworkError");
+          setError(
+            isFetchFailed
+              ? "Could not reach Supabase. Check: (1) NEXT_PUBLIC_SUPABASE_URL is correct (https://xxx.supabase.co, no trailing slash), (2) project is not paused in Supabase dashboard, (3) network/firewall allows supabase.co"
+              : msg
+          );
           setLoading(false);
         }
         return;
@@ -126,7 +193,16 @@ export default function ShopPage() {
 
       if (vRes.error) {
         if (mounted) {
-          setError(vRes.error.message);
+          const msg = vRes.error.message;
+          const isFetchFailed =
+            msg?.includes("Failed to fetch") ||
+            msg?.includes("fetch") ||
+            msg?.includes("NetworkError");
+          setError(
+            isFetchFailed
+              ? "Could not reach Supabase. Check: (1) NEXT_PUBLIC_SUPABASE_URL is correct (https://xxx.supabase.co, no trailing slash), (2) project is not paused in Supabase dashboard, (3) network/firewall allows supabase.co"
+              : msg
+          );
           setLoading(false);
         }
         return;
@@ -159,6 +235,18 @@ export default function ShopPage() {
         setSelectedVariant(defaultsVar);
         setQtyByProduct(defaultsQty);
         setLoading(false);
+      }
+      } catch (e) {
+        if (mounted) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const isFetchFailed = msg?.includes("Failed to fetch") || msg?.includes("fetch");
+          setError(
+            isFetchFailed
+              ? "Could not reach Supabase. Check: (1) NEXT_PUBLIC_SUPABASE_URL is correct (https://xxx.supabase.co), (2) project is not paused in Supabase dashboard, (3) network allows supabase.co"
+              : msg
+          );
+          setLoading(false);
+        }
       }
     }
 
@@ -236,19 +324,28 @@ export default function ShopPage() {
               </div>
             </div>
 
-            {/* Cart button */}
-            <button
-              onClick={openCart}
-              className={[
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-sm transition active:translate-y-px",
-                accentBtn,
-              ].join(" ")}
-              aria-label="Open cart"
-            >
-              <span className="text-base">🛒</span>
-              <span className="hidden sm:inline">Cart</span>
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-700 shadow-sm transition hover:bg-gray-50 active:translate-y-px"
+                aria-label="Admin"
+              >
+                <span className="text-base">⚙</span>
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+              <button
+                onClick={openCart}
+                className={[
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-sm transition active:translate-y-px",
+                  accentBtn,
+                ].join(" ")}
+                aria-label="Open cart"
+              >
+                <span className="text-base">🛒</span>
+                <span className="hidden sm:inline">Cart</span>
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{cartCount}</span>
+              </button>
+            </div>
           </div>
 
           {/* Categories: mobile scroll + desktop wrap. (No arrows) */}
@@ -268,7 +365,7 @@ export default function ShopPage() {
                     key={c}
                     onClick={() => setActiveCategory(c)}
                     className={[
-                      "whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition",
+                      "min-h-[44px] whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition",
                       active
                         ? "bg-gray-900 text-white"
                         : "bg-white text-gray-800 border border-gray-200 hover:bg-gray-50",
@@ -339,9 +436,13 @@ export default function ShopPage() {
                   {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gray-900 text-sm font-extrabold text-white">
-                        {initials(p.name)}
-                      </div>
+                      <ProductImage
+                        imagePath={p.image_path}
+                        imageAlt={p.image_alt}
+                        name={p.name}
+                        updatedAt={p.updated_at}
+                        size={48}
+                      />
 
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-gray-500">
@@ -428,7 +529,7 @@ export default function ShopPage() {
                       <button
                         onClick={() => handleAdd(p)}
                         className={[
-                          "shrink-0 rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
+                          "shrink-0 min-h-[44px] rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
                           justAdded ? "bg-emerald-600" : accentBtn,
                         ].join(" ")}
                       >
@@ -451,7 +552,7 @@ export default function ShopPage() {
       <button
         onClick={openCart}
         className={[
-          "fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px sm:hidden",
+          "fixed bottom-5 right-5 z-40 inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 py-3 text-sm font-extrabold text-white shadow-lg transition active:translate-y-px sm:hidden",
           accentBtn,
         ].join(" ")}
         aria-label="Open cart (floating)"
@@ -470,10 +571,11 @@ export default function ShopPage() {
           ].join(" ")}
         />
 
-        {/* Mobile bottom sheet */}
+        {/* Mobile bottom sheet: fixed height for internal scroll + safe area */}
         <div
           className={[
-            "absolute bottom-0 left-0 right-0 max-h-[82vh] rounded-t-3xl bg-white shadow-2xl transition-transform",
+            "absolute bottom-0 left-0 right-0 flex h-[82vh] max-h-[82vh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transition-transform",
+            "pb-[env(safe-area-inset-bottom,0px)]",
             isOpen ? "translate-y-0" : "translate-y-full",
           ].join(" ")}
         >
@@ -585,8 +687,8 @@ function CartContent(props: {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b px-4 py-4">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 border-b px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-bold text-gray-500">Your cart</div>
@@ -594,14 +696,6 @@ function CartContent(props: {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (confirm("Clear the whole cart?")) onClear();
-              }}
-              className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-bold hover:bg-gray-50 transition"
-            >
-              Clear
-            </button>
             <button
               onClick={onClose}
               className="rounded-full bg-gray-900 px-3 py-1.5 text-sm font-bold text-white hover:opacity-90 transition"
@@ -629,7 +723,7 @@ function CartContent(props: {
 
                   <button
                     onClick={() => onRemove(it.variant_id)}
-                    className="text-sm font-black text-red-600 hover:underline"
+                    className="rounded-full border border-red-200 px-2.5 py-1 text-sm font-black text-red-600 hover:bg-red-50 transition"
                   >
                     Remove
                   </button>
@@ -666,7 +760,7 @@ function CartContent(props: {
         )}
       </div>
 
-      <div className="border-t px-4 py-4">
+      <div className="shrink-0 border-t px-4 py-4">
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Subtotal (GST incl.)</span>
@@ -681,6 +775,9 @@ function CartContent(props: {
             <span className="font-black">{money(total)}</span>
           </div>
         </div>
+        <p className="mt-2 text-xs text-gray-600">
+          Pickup at the next training session, paying on card only.
+        </p>
 
         {successRef ? (
           <div className="mt-4 rounded-2xl bg-black/5 p-4">
@@ -688,7 +785,7 @@ function CartContent(props: {
             <div className="mt-1 text-sm">
               Reference: <b>{successRef}</b>
             </div>
-            <div className="mt-2 text-sm text-gray-600">Pickup at the next training session.</div>
+            <div className="mt-2 text-sm text-gray-600">Pickup at the next training session, paying on card only.</div>
             <button
               onClick={onClose}
               className="mt-3 w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px bg-gray-900"
@@ -746,7 +843,7 @@ function CartContent(props: {
                 onClick={placeOrder}
                 disabled={items.length === 0 || isPlacing}
                 className={[
-                  "w-full rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px disabled:opacity-50",
+                  "w-full min-h-[44px] rounded-2xl px-4 py-3 font-black text-white transition active:translate-y-px disabled:opacity-50",
                   items.length === 0 ? "bg-gray-300 cursor-not-allowed" : accentBtn,
                 ].join(" ")}
               >

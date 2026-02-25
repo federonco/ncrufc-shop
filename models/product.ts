@@ -14,5 +14,7 @@ export type Product = {
   description: string;
   sort_order: number;
   active?: boolean;
+  image_path?: string | null;
+  image_alt?: string | null;
   product_variants: ProductVariant[];
 };

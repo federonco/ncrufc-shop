@@ -188,7 +188,7 @@ export async function POST(req: Request) {
               .join("")}
           </ul>
           <p><b>Total (GST incl.):</b> $${total.toFixed(2)}</p>
-          <p>Pickup at the next training session.</p>
+          <p>Pickup at the next training session, paying on card only.</p>
         `,
       });
     } catch (emailErr) {
