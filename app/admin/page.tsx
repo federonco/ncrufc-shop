@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { getProductImageUrl } from "@/lib/product-image";
 
 function money(n: number) {
@@ -75,12 +74,31 @@ export default function AdminPage() {
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({
-    unpaid: true,
-    stock: true,
-    orders: true,
+    unpaid: false,
+    stock: false,
+    orders: false,
   });
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const toggleSection = (key: "unpaid" | "stock" | "orders") =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+
+  const toggleCategory = (cat: string) =>
+    setCollapsedCategories((s) => ({ ...s, [cat]: !s[cat] }));
+
+  const lowStockByCategory = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const cat of stockData?.grouped ?? []) {
+      let n = 0;
+      for (const p of cat.products) {
+        for (const v of p.variants) {
+          if (v.stock < 5) n++;
+        }
+      }
+      if (n > 0) map[cat.category] = n;
+    }
+    return map;
+  }, [stockData?.grouped]);
 
   const loadStock = useCallback(async () => {
     setStockLoading(true);
@@ -203,12 +221,22 @@ export default function AdminPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-xl font-black tracking-tight text-gray-900">Admin</h1>
-              <Link
-                href="/shop"
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fetch("/api/admin/logout", {
+                      method: "POST",
+                      credentials: "include",
+                    });
+                  } finally {
+                    window.location.href = "/shop";
+                  }
+                }}
                 className="text-sm text-gray-500 hover:text-orange-600 transition"
               >
-                ← Back to shop
-              </Link>
+                ← Exit admin / Back to shop
+              </button>
             </div>
           </div>
         </div>
@@ -390,13 +418,40 @@ export default function AdminPage() {
               No variants match the filter.
             </div>
           ) : (
-            <div className="mt-4 space-y-6">
+            <div className="mt-4 space-y-4">
                     {stockData?.grouped
                 ?.filter((cat) => !stockCategory || cat.category === stockCategory)
-                .map((cat) => (
-                <div key={cat.category}>
-                  <h3 className="font-bold text-gray-700">{cat.category}</h3>
-                  <div className="mt-2 space-y-4">
+                .map((cat) => {
+                  const isCollapsed = collapsedCategories[cat.category] !== false;
+                  const lowCount = lowStockByCategory[cat.category] ?? 0;
+                  const hasLowStock = lowCount > 0;
+                  return (
+                <div key={cat.category} className="rounded-xl border border-gray-100 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(cat.category)}
+                    className={[
+                      "w-full flex items-center justify-between px-4 py-3 text-left transition",
+                      hasLowStock ? "bg-red-50/70" : "hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    <span className={[
+                      "font-bold",
+                      hasLowStock ? "text-red-700" : "text-gray-700",
+                    ].join(" ")}>
+                      {cat.category}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {hasLowStock && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700 animate-pulse">
+                          {lowCount} low
+                        </span>
+                      )}
+                      <span className="text-gray-400">{isCollapsed ? "+" : "−"}</span>
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                  <div className="border-t border-gray-100 p-4 space-y-4 bg-white">
                     {cat.products.map((prod) => (
                       <div
                         key={prod.id}
@@ -422,7 +477,6 @@ export default function AdminPage() {
                               <thead>
                                 <tr className="text-left text-gray-500">
                                   <th className="py-1 pr-1">Size</th>
-                                  <th className="py-1 pr-1 hidden sm:table-cell">SKU</th>
                                   <th className="py-1 pr-1">Stock</th>
                                   <th className="py-1 pr-1">Price</th>
                                   <th className="py-1">Save</th>
@@ -444,8 +498,10 @@ export default function AdminPage() {
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
-              ))}
+              );
+                })}
             </div>
           )}
           </div>
@@ -471,109 +527,189 @@ export default function AdminPage() {
               onChange={(e) => setOrdersMonth(e.target.value)}
               className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-orange-300 focus:ring-2 focus:ring-orange-100 focus:outline-none transition"
             />
-            <a
-              href={`/api/admin/orders-monthly-pdf?year=${ordersMonth.slice(0, 4)}&month=${parseInt(ordersMonth.slice(5, 7), 10)}`}
-              download={`Orders (${new Date(parseInt(ordersMonth.slice(0, 4), 10), parseInt(ordersMonth.slice(5, 7), 10) - 1).toLocaleString("en", { month: "long", year: "numeric" }) }).pdf`}
-              className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition inline-block ${accentBtn}`}
-            >
-              Download PDF
-            </a>
+            <PdfDownloadButton
+              year={parseInt(ordersMonth.slice(0, 4), 10)}
+              month={parseInt(ordersMonth.slice(5, 7), 10)}
+              loading={pdfLoading}
+              onLoadingChange={setPdfLoading}
+              onError={setError}
+              accentBtn={accentBtn}
+            />
           </div>
           {ordersLoading ? (
             <div className="mt-6 text-gray-500">Loading…</div>
+          ) : orders.length === 0 ? (
+            <div className="mt-6 text-gray-500">No orders for this month.</div>
           ) : (
-            <div className="mt-4 space-y-3">
-              {orders.map((o) => (
-                <div
-                  key={o.id}
-                  className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm hover:shadow transition"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-black text-gray-900">
-                        {o.reference}
-                        {o.paid_at ? (
-                          <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                            Paid
+            <div className="mt-4 overflow-x-auto -mx-1">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-200">
+                    <th className="py-2 pr-2">Date</th>
+                    <th className="py-2 pr-2">Reference</th>
+                    <th className="py-2 pr-2 hidden sm:table-cell">Customer</th>
+                    <th className="py-2 pr-2">Total</th>
+                    <th className="py-2 pr-2">Status</th>
+                    <th className="py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((o) => {
+                    const statusBadge = o.paid_at
+                      ? "bg-emerald-100 text-emerald-700"
+                      : o.status === "cancelled"
+                        ? "bg-gray-100 text-gray-600"
+                        : "bg-amber-100 text-amber-700";
+                    return (
+                      <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td className="py-2.5 pr-2 text-gray-600 whitespace-nowrap">
+                          {new Date(o.created_at).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="py-2.5 pr-2 font-bold text-gray-900">{o.reference}</td>
+                        <td className="py-2.5 pr-2 text-gray-600 hidden sm:table-cell max-w-[140px] truncate">
+                          {o.customer_name}
+                        </td>
+                        <td className="py-2.5 pr-2 font-bold text-gray-900">{money(o.total)}</td>
+                        <td className="py-2.5 pr-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${statusBadge}`}>
+                            {o.paid_at ? "Paid" : o.status === "cancelled" ? "Cancelled" : "Unpaid"}
                           </span>
-                        ) : o.status === "cancelled" ? (
-                          <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-600">
-                            Cancelled
-                          </span>
-                        ) : (
-                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">
-                            Unpaid
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {o.customer_name} · {o.customer_email ?? ""}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500">
-                        {new Date(o.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-gray-900">
-                        {money(o.total)}
-                      </span>
-                      {!o.paid_at && o.status !== "cancelled" && (
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Mark order ${o.reference} (${money(o.total)}) as paid?`
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {!o.paid_at && o.status !== "cancelled" && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Mark ${o.reference} as paid?`)) markPaid(o.id);
+                                }}
+                                disabled={payingOrder === o.id || cancellingOrder === o.id}
+                                className={`rounded px-2 py-1 text-xs font-bold text-white disabled:opacity-50 ${accentBtn}`}
+                              >
+                                {payingOrder === o.id ? "…" : "Mark paid"}
+                              </button>
+                            )}
+                            {o.status !== "cancelled" && (
+                              confirmingCancelOrder === o.id ? (
+                                <button
+                                  onClick={() => markCancelled(o.id)}
+                                  disabled={cancellingOrder === o.id}
+                                  className="rounded bg-amber-400 px-2 py-1 text-xs font-bold text-amber-900 disabled:opacity-50"
+                                >
+                                  {cancellingOrder === o.id ? "…" : "Confirm?"}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setConfirmingCancelOrder(o.id)}
+                                  disabled={payingOrder === o.id || cancellingOrder === o.id}
+                                  className="rounded border border-gray-300 px-2 py-1 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
                               )
-                            ) {
-                              markPaid(o.id);
-                            }
-                          }}
-                          disabled={payingOrder === o.id || cancellingOrder === o.id}
-                          className={`rounded-lg px-3 py-1.5 text-sm font-bold text-white shadow-sm disabled:opacity-50 ${accentBtn}`}
-                        >
-                          {payingOrder === o.id ? "…" : "Mark paid"}
-                        </button>
-                      )}
-                      {o.status !== "cancelled" && (
-                        confirmingCancelOrder === o.id ? (
-                          <button
-                            onClick={() => markCancelled(o.id)}
-                            disabled={cancellingOrder === o.id}
-                            className="rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-bold text-amber-900 shadow-sm hover:bg-amber-500 disabled:opacity-50 transition"
-                          >
-                            {cancellingOrder === o.id ? "…" : "Confirm?"}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmingCancelOrder(o.id)}
-                            disabled={payingOrder === o.id || cancellingOrder === o.id}
-                            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition"
-                          >
-                            Cancel
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                  <ul className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-sm text-gray-600">
-                    {(itemsByOrder[o.id] ?? []).map((it, i) => (
-                      <li key={i}>
-                        {it.qty}× {it.name}
-                        {it.size ? ` (${it.size})` : ""} — {money(it.line_total)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-              {orders.length === 0 && !ordersLoading && (
-                <div className="text-gray-500">No orders for this month.</div>
-              )}
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
           </div>
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function PdfDownloadButton({
+  year,
+  month,
+  loading,
+  onLoadingChange,
+  onError,
+  accentBtn,
+}: {
+  year: number;
+  month: number;
+  loading: boolean;
+  onLoadingChange: (v: boolean) => void;
+  onError: (msg: string) => void;
+  accentBtn: string;
+}) {
+  const monthLabel = new Date(year, month - 1).toLocaleString("en", {
+    month: "long",
+    year: "numeric",
+  });
+  const filename = `Orders (${monthLabel}).pdf`;
+  const url = `/api/admin/orders-monthly-pdf?year=${year}&month=${month}`;
+
+  async function handleDownload() {
+    onLoadingChange(true);
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Download failed");
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("application/pdf")) {
+        const text = await res.text();
+        throw new Error(text?.slice(0, 200) || "Invalid response");
+      }
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], { type: "application/pdf" });
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "PDF download failed");
+    } finally {
+      onLoadingChange(false);
+    }
+  }
+
+  async function handleOpenInTab() {
+    onLoadingChange(true);
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load PDF");
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], { type: "application/pdf" });
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Could not open PDF");
+    } finally {
+      onLoadingChange(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={loading}
+        className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition disabled:opacity-60 ${accentBtn}`}
+      >
+        {loading ? "…" : "Download PDF"}
+      </button>
+      <button
+        type="button"
+        onClick={handleOpenInTab}
+        disabled={loading}
+        className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-60"
+      >
+        {loading ? "…" : "Open in tab"}
+      </button>
     </div>
   );
 }
@@ -776,8 +912,16 @@ function InlineVariantRow({
 
   return (
     <tr>
-      <td className="py-1.5 pr-1">{variant.size ?? "—"}</td>
-      <td className="py-1.5 pr-1 font-mono text-[10px] hidden sm:table-cell truncate">{variant.sku || "—"}</td>
+      <td className="py-1.5 pr-1">
+        <div>
+          <span>{variant.size ?? "—"}</span>
+          {variant.sku && (
+            <div className="font-mono text-[10px] text-gray-400 truncate max-w-[90px]" title={variant.sku}>
+              {variant.sku}
+            </div>
+          )}
+        </div>
+      </td>
       <td className="py-1.5 pr-1">
         <div className="flex items-center gap-0.5">
           <button

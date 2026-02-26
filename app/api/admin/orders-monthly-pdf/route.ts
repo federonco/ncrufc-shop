@@ -151,7 +151,7 @@ export async function GET(req: Request) {
     });
 
     const filename = `Orders (${monthLabel}).pdf`;
-    return new NextResponse(new Uint8Array(pdf), {
+    return new Response(new Uint8Array(pdf), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

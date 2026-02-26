@@ -60,12 +60,14 @@ function ProductImage({
   name,
   updatedAt,
   size = 48,
+  onClick,
 }: {
   imagePath: string | null | undefined;
   imageAlt?: string | null;
   name: string;
   updatedAt?: string | null;
   size?: number;
+  onClick?: () => void;
 }) {
   const version = updatedAt ? new Date(updatedAt).getTime() : undefined;
   const url = imagePath ? getProductImageUrl(imagePath, version) : null;
@@ -81,20 +83,32 @@ function ProductImage({
     );
   }
 
+  const content = (
+    <Image
+      src={url}
+      alt={imageAlt?.trim() || name}
+      width={size}
+      height={size}
+      className="object-cover"
+      loading="lazy"
+      decoding="async"
+    />
+  );
+
   return (
     <div
-      className="relative shrink-0 overflow-hidden rounded-2xl bg-gray-100"
+      className={[
+        "relative shrink-0 overflow-hidden rounded-2xl bg-gray-100",
+        onClick ? "cursor-pointer hover:opacity-90 transition" : "",
+      ].join(" ")}
       style={{ width: size, height: size }}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `View ${name} image` : undefined}
     >
-      <Image
-        src={url}
-        alt={imageAlt?.trim() || name}
-        width={size}
-        height={size}
-        className="object-cover"
-        loading="lazy"
-        decoding="async"
-      />
+      {content}
     </div>
   );
 }
@@ -121,6 +135,7 @@ export default function ShopPage() {
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
   const [qtyByProduct, setQtyByProduct] = useState<Record<string, number>>({});
   const [addedKey, setAddedKey] = useState<string | null>(null);
+  const [imageModal, setImageModal] = useState<{ url: string; alt: string } | null>(null);
 
   const accentBtn = "bg-orange-500 hover:bg-orange-600";
 
@@ -130,6 +145,14 @@ export default function ShopPage() {
       document.body.style.overflow = "";
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setImageModal(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Category order (manual)
   const CATEGORY_ORDER = [
@@ -447,6 +470,18 @@ export default function ShopPage() {
                         name={p.name}
                         updatedAt={p.updated_at}
                         size={48}
+                        onClick={
+                          p.image_path
+                            ? () =>
+                                setImageModal({
+                                  url: getProductImageUrl(
+                                    p.image_path!,
+                                    p.updated_at ? new Date(p.updated_at).getTime() : undefined
+                                  )!,
+                                  alt: p.image_alt?.trim() || p.name,
+                                })
+                            : undefined
+                        }
                       />
 
                       <div className="min-w-0">
@@ -552,6 +587,34 @@ export default function ShopPage() {
           </div>
         )}
       </div>
+
+      {/* Image modal (tap to expand) */}
+      {imageModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setImageModal(null)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && setImageModal(null)}
+          aria-label="Close image"
+        >
+          <button
+            type="button"
+            onClick={() => setImageModal(null)}
+            className="absolute top-4 right-4 z-10 rounded-full bg-white/90 p-2 text-gray-800 shadow-lg hover:bg-white"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          <img
+            src={imageModal.url}
+            alt={imageModal.alt}
+            className="max-h-[70vh] max-w-[90vw] sm:max-w-[70vw] w-auto h-auto object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: "70vh" }}
+          />
+        </div>
+      )}
 
       {/* Floating cart pill (mobile) */}
       <button
@@ -709,7 +772,7 @@ function CartContent(props: {
       )}
 
       {previewUrl && (
-        <div className="shrink-0 relative h-[min(70dvh,320px)] bg-gray-100">
+        <div className="shrink-0 relative h-[min(35dvh,140px)] bg-gray-100">
           <Image
             src={previewUrl}
             alt={previewItem?.image_alt?.trim() || previewItem?.name || "Product"}
@@ -720,11 +783,11 @@ function CartContent(props: {
         </div>
       )}
 
-      <div className="shrink-0 border-b px-4 py-3">
-        <div className="flex items-start justify-between gap-3">
+      <div className="shrink-0 border-b px-4 py-2">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs font-bold text-gray-500">Your cart</div>
-            <div className="text-lg font-black text-gray-900">{cartCount} item(s)</div>
+            <div className="text-[11px] font-bold text-gray-500">Your cart</div>
+            <div className="text-base font-black text-gray-900">{cartCount} item(s)</div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -738,7 +801,7 @@ function CartContent(props: {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto px-4 py-4">
+      <div className="flex-1 min-h-[min(50dvh,360px)] overflow-y-auto overflow-x-hidden px-4 py-3 overscroll-contain">
         {items.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-gray-700">
             Empty cart. Add items from the shop.
@@ -876,9 +939,6 @@ function CartContent(props: {
               >
                 Clear cart
               </button>
-            </div>
-            <div className="mt-2 text-xs text-gray-500">
-              Prices include GST. Final amounts are calculated on order creation.
             </div>
           </>
         )}
