@@ -150,7 +150,7 @@ export async function GET(req: Request) {
       doc.end();
     });
 
-    const filename = `Orders (${monthLabel}).pdf`;
+    const filename = `orders-${year}-${String(month).padStart(2, "0")}.pdf`;
     return new Response(new Uint8Array(pdf), {
       status: 200,
       headers: {

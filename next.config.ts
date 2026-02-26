@@ -5,6 +5,7 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
   : "placeholder.supabase.co";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdfkit"],
   images: {
     remotePatterns: [
       {

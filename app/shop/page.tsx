@@ -654,7 +654,7 @@ export default function ShopPage() {
         />
         <div
           className={[
-            "relative flex w-full max-w-[480px] min-h-0 max-h-[90vh] h-[90vh] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl transition-all",
+            "relative flex w-full max-w-[480px] h-[90vh] max-h-[90vh] min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl transition-all",
             "pb-[env(safe-area-inset-bottom,0px)]",
             isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0",
           ].join(" ")}
@@ -758,7 +758,7 @@ function CartContent(props: {
     : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden h-full">
       {/* Full-screen confirmation modal after successful checkout */}
       {successRef && (
         <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white p-6">
@@ -815,7 +815,7 @@ function CartContent(props: {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-3 overscroll-contain [-webkit-overflow-scrolling:touch]">
+      <div className="flex-1 min-h-0 shrink overflow-y-auto overflow-x-hidden px-4 py-3 overscroll-contain [-webkit-overflow-scrolling:touch]">
         {items.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-gray-700">
             Empty cart. Add items from the shop.

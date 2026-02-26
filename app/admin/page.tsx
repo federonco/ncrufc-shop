@@ -80,6 +80,7 @@ export default function AdminPage() {
   const [payingOrder, setPayingOrder] = useState<string | null>(null);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
   const [confirmingCancelOrder, setConfirmingCancelOrder] = useState<string | null>(null);
+  const [deleteConfirmOrder, setDeleteConfirmOrder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({
     unpaid: false,
@@ -222,11 +223,17 @@ export default function AdminPage() {
   }
 
   async function deleteOrder(orderId: string) {
-    if (!confirm("Delete this order? This will mark it as cancelled.")) return;
+    setDeleteConfirmOrder(orderId);
+  }
+
+  async function confirmDeleteOrder() {
+    const orderId = deleteConfirmOrder;
+    if (!orderId) return;
+    setDeleteConfirmOrder(null);
     setCancellingOrder(orderId);
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}/cancel`, {
-        method: "POST",
+      const res = await fetch(`/api/admin/orders/${orderId}/delete`, {
+        method: "DELETE",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Delete failed");
@@ -567,21 +574,28 @@ export default function AdminPage() {
               accentBtn={accentBtn}
             />
           </div>
+          {deleteConfirmOrder && (
+            <DeleteConfirmModal
+              orderRef={orders.find((o) => o.id === deleteConfirmOrder)?.reference ?? "—"}
+              onConfirm={confirmDeleteOrder}
+              onCancel={() => setDeleteConfirmOrder(null)}
+            />
+          )}
           {ordersLoading ? (
             <div className="mt-6 text-gray-500">Loading…</div>
           ) : orders.length === 0 ? (
             <div className="mt-6 text-gray-500">No orders for this month.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto -mx-1">
-              <table className="w-full min-w-[520px] text-sm">
+            <div className="mt-4 min-w-0">
+              <table className="w-full text-xs sm:text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 border-b border-gray-200">
-                    <th className="py-2 pr-2">Date</th>
-                    <th className="py-2 pr-2">Reference</th>
-                    <th className="py-2 pr-2 hidden sm:table-cell">Customer</th>
-                    <th className="py-2 pr-2">Total</th>
-                    <th className="py-2 pr-2">Status</th>
-                    <th className="py-2 text-right">Actions</th>
+                    <th className="py-1.5 pr-1">Date</th>
+                    <th className="py-1.5 pr-1">Ref</th>
+                    <th className="hidden sm:table-cell py-1.5 pr-1">Customer</th>
+                    <th className="py-1.5 pr-1">Total</th>
+                    <th className="py-1.5 pr-1">Status</th>
+                    <th className="py-1.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -593,20 +607,22 @@ export default function AdminPage() {
                         : "bg-amber-100 text-amber-700";
                     return (
                       <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                        <td className="py-2.5 pr-2 text-gray-600 whitespace-nowrap">
+                        <td className="py-1.5 pr-1 text-gray-600 truncate" title={o.created_at}>
                           {formatDateDDMMYY(o.created_at)}
                         </td>
-                        <td className="py-2.5 pr-2 font-bold text-gray-900">{o.reference}</td>
-                        <td className="py-2.5 pr-2 text-gray-600 hidden sm:table-cell max-w-[140px] truncate">
+                        <td className="py-1.5 pr-1 font-bold text-gray-900 truncate" title={o.reference}>
+                          {o.reference}
+                        </td>
+                        <td className="py-1.5 pr-1 text-gray-600 hidden sm:table-cell truncate" title={o.customer_name}>
                           {o.customer_name}
                         </td>
-                        <td className="py-2.5 pr-2 font-bold text-gray-900">{money(o.total)}</td>
-                        <td className="py-2.5 pr-2">
+                        <td className="py-1.5 pr-1 font-bold text-gray-900 truncate">{money(o.total)}</td>
+                        <td className="py-1.5 pr-1">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${statusBadge}`}>
                             {o.paid_at ? "Paid" : o.status === "cancelled" ? "Cancelled" : "Unpaid"}
                           </span>
                         </td>
-                        <td className="py-2.5 text-right">
+                        <td className="py-1.5 text-right">
                           <button
                             onClick={() => deleteOrder(o.id)}
                             disabled={cancellingOrder === o.id}
@@ -645,11 +661,7 @@ function PdfDownloadButton({
   onError: (msg: string) => void;
   accentBtn: string;
 }) {
-  const monthLabel = new Date(year, month - 1).toLocaleString("en", {
-    month: "long",
-    year: "numeric",
-  });
-  const filename = `Orders (${monthLabel}).pdf`;
+  const filename = `orders-${year}-${String(month).padStart(2, "0")}.pdf`;
   const url = `/api/admin/orders-monthly-pdf?year=${year}&month=${month}`;
 
   async function handleDownload() {
@@ -689,6 +701,49 @@ function PdfDownloadButton({
     >
       {loading ? "…" : "Download PDF"}
     </button>
+  );
+}
+
+function DeleteConfirmModal({
+  orderRef,
+  onConfirm,
+  onCancel,
+}: {
+  orderRef: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-black text-gray-900">Delete order?</h3>
+        <p className="mt-2 text-sm text-gray-600">
+          Order <strong>{orderRef}</strong> will be permanently deleted. This cannot be undone.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
