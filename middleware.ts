@@ -6,7 +6,18 @@ import { compareSync } from "bcrypt-edge";
 const ADMIN_PATHS = ["/admin"];
 const ADMIN_API_PREFIX = "/api/admin";
 const ADMIN_SESSION_COOKIE = "admin_session";
-const SESSION_MAX_AGE_SEC = 24 * 60 * 60; // 24h
+
+function getSessionMode(): "always" | "ttl" | "session" {
+  const v = process.env.ADMIN_SESSION_MODE?.toLowerCase();
+  if (v === "always" || v === "ttl" || v === "session") return v;
+  return "ttl";
+}
+
+function getSessionTtlSeconds(): number {
+  const v = process.env.ADMIN_SESSION_TTL_SECONDS;
+  const n = parseInt(v ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 600;
+} // 24h
 
 function isAdminPath(pathname: string): boolean {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return true;
@@ -59,7 +70,13 @@ async function verifySessionCookie(cookieValue: string): Promise<boolean> {
   const timestamp = cookieValue.slice(0, idx);
   const sigB64 = cookieValue.slice(idx + 1);
   const ts = parseInt(timestamp, 10);
-  if (!Number.isFinite(ts) || Date.now() - ts > SESSION_MAX_AGE_SEC * 1000) return false;
+  if (!Number.isFinite(ts)) return false;
+  const mode = getSessionMode();
+  if (mode === "ttl") {
+    const ttlMs = getSessionTtlSeconds() * 1000;
+    if (Date.now() - ts > ttlMs) return false;
+  }
+  // "always" and "session": no TTL check (session cookie expires on browser close)
   try {
     const key = await crypto.subtle.importKey(
       "raw",
@@ -159,13 +176,15 @@ export async function middleware(request: NextRequest) {
   if (useSessionCookie) {
     const token = await createSessionCookie();
     if (token) {
-      res.cookies.set(ADMIN_SESSION_COOKIE, token, {
+      const mode = getSessionMode();
+      const opts: Parameters<typeof res.cookies.set>[2] = {
         path: "/",
-        maxAge: SESSION_MAX_AGE_SEC,
         httpOnly: true,
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
-      });
+      };
+      if (mode === "ttl") opts.maxAge = getSessionTtlSeconds();
+      res.cookies.set(ADMIN_SESSION_COOKIE, token, opts);
     }
   }
   return res;

@@ -5,7 +5,18 @@ import { createClient } from "@supabase/supabase-js";
 import { compareSync } from "bcrypt-edge";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
-const SESSION_MAX_AGE_SEC = 24 * 60 * 60;
+
+function getSessionMode(): "always" | "ttl" | "session" {
+  const v = process.env.ADMIN_SESSION_MODE?.toLowerCase();
+  if (v === "always" || v === "ttl" || v === "session") return v;
+  return "ttl";
+}
+
+function getSessionTtlSeconds(): number {
+  const v = process.env.ADMIN_SESSION_TTL_SECONDS;
+  const n = parseInt(v ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : 600;
+}
 
 async function createSessionCookie(secret: string): Promise<string> {
   const timestamp = String(Date.now());
@@ -80,13 +91,18 @@ export async function POST(req: Request) {
 
     const token = await createSessionCookie(secret);
     const res = NextResponse.json({ ok: true });
-    res.cookies.set(ADMIN_SESSION_COOKIE, token, {
+    const mode = getSessionMode();
+    const cookieOptions: Parameters<typeof res.cookies.set>[2] = {
       path: "/",
-      maxAge: SESSION_MAX_AGE_SEC,
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-    });
+    };
+    if (mode === "ttl") {
+      cookieOptions.maxAge = getSessionTtlSeconds();
+    }
+    // "always" and "session": no maxAge = session cookie (expires on browser close)
+    res.cookies.set(ADMIN_SESSION_COOKIE, token, cookieOptions);
     return res;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";

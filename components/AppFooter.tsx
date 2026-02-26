@@ -10,10 +10,11 @@ export function AppFooter() {
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Created by</span>
           <a
-            href="https://github.com/federonco/readx-assets"
+            href="https://www.readx.com.au"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5"
+            aria-label="Visit ReadX website"
+            className="inline-flex cursor-pointer items-center gap-0.5"
           >
             <img
               src={READX_IMAGE_URL}

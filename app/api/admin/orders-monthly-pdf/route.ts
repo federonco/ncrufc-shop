@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { addPdfFooter } from "@/lib/pdf-footer";
 import PDFDocument from "pdfkit";
 
 const MARGIN = 40;
@@ -141,6 +142,8 @@ export async function GET(req: Request) {
     doc.font("Helvetica-Bold");
     doc.text(`Total: ${money(totalAmount)}`, MARGIN, doc.y);
     doc.text(`Orders: ${rows.length}`, MARGIN, doc.y + ROW_HEIGHT);
+
+    addPdfFooter(doc, MARGIN);
 
     const pdf = await new Promise<Buffer>((resolve, reject) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));

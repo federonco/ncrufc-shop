@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import imageCompression from "browser-image-compression";
 import { getProductImageUrl } from "@/lib/product-image";
+
+const MAX_INPUT_SIZE = 5 * 1024 * 1024; // 5MB - reject before processing
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 function money(n: number) {
   if (!Number.isFinite(n)) return "$0.00";
@@ -833,22 +837,48 @@ function ProductImageUpload({
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      onError("File too large. Max 2MB. Use WebP for best compression.");
-      return;
-    }
-    const ok = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
-    if (!ok) {
+
+    // 1) Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
       onError("Use JPEG, PNG, or WebP.");
       return;
     }
+
+    // 2) Reject files larger than 5MB before processing
+    if (file.size > MAX_INPUT_SIZE) {
+      onError("File too large. Max 5MB before compression.");
+      return;
+    }
+
     e.target.value = "";
     setMsg(null);
     setUploading(true);
+
     try {
+      // 3) Compress + convert to WebP in browser
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: "image/webp",
+        initialQuality: 0.8,
+      });
+
+      const webpFile = new File([compressed], file.name.replace(/\.[^.]+$/, "") + ".webp", {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+
+      if (process.env.NODE_ENV === "development") {
+        const origKB = (file.size / 1024).toFixed(1);
+        const compKB = (webpFile.size / 1024).toFixed(1);
+        console.log(`[ProductImage] Original: ${origKB}KB → Compressed: ${compKB}KB`);
+      }
+
+      // 4) Upload to Supabase
       const formData = new FormData();
       formData.set("product_id", productId);
-      formData.set("file", file);
+      formData.set("file", webpFile);
       const res = await fetch("/api/admin/product-image", {
         method: "POST",
         body: formData,
@@ -860,7 +890,8 @@ function ProductImageUpload({
       onSuccess();
       setTimeout(() => setMsg(null), 2000);
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Upload failed");
+      const message = err instanceof Error ? err.message : "Upload failed";
+      onError(message);
     } finally {
       setUploading(false);
     }
@@ -888,6 +919,10 @@ function ProductImageUpload({
     }
   }
 
+  const spinner = (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden />
+  );
+
   function initials(name: string) {
     const parts = name.trim().split(/\s+/);
     const a = parts[0]?.[0] ?? "?";
@@ -914,7 +949,7 @@ function ProductImageUpload({
               disabled={uploading || !!removing}
               className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow hover:bg-orange-600 disabled:opacity-50"
             >
-              {uploading ? "…" : "Add"}
+              {uploading ? spinner : "Add"}
             </button>
           )}
           {imgList.length > 0 && (
@@ -954,7 +989,7 @@ function ProductImageUpload({
             disabled={uploading || !!removing}
             className="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition active:translate-y-px"
           >
-            {uploading ? "…" : "Add"}
+            {uploading ? spinner : "Add"}
           </button>
         )}
         {imgList.length > 0 && (
@@ -969,7 +1004,7 @@ function ProductImageUpload({
         )}
       </div>
       {msg && <span className="text-[10px] text-emerald-600">{msg}</span>}
-      <span className="text-[9px] text-gray-400">Up to 5 images. WebP &lt;2MB recommended.</span>
+      <span className="text-[9px] text-gray-400">Up to 5 images. JPEG/PNG/WebP up to 5MB (auto-compressed).</span>
     </div>
   );
 }
