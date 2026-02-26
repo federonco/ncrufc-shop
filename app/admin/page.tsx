@@ -8,6 +8,14 @@ function money(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
+function formatDateDDMMYY(iso: string): string {
+  const d = new Date(iso);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
+}
+
 type VariantRow = {
   id: string;
   sku: string;
@@ -70,8 +78,8 @@ export default function AdminPage() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [updatingVariant, setUpdatingVariant] = useState<string | null>(null);
   const [payingOrder, setPayingOrder] = useState<string | null>(null);
-  const [confirmingCancelOrder, setConfirmingCancelOrder] = useState<string | null>(null);
   const [cancellingOrder, setCancellingOrder] = useState<string | null>(null);
+  const [confirmingCancelOrder, setConfirmingCancelOrder] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState({
     unpaid: false,
@@ -79,6 +87,7 @@ export default function AdminPage() {
     orders: false,
   });
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [stockPdfLoading, setStockPdfLoading] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const toggleSection = (key: "unpaid" | "stock" | "orders") =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
@@ -212,6 +221,29 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteOrder(orderId: string) {
+    if (!confirm("Delete this order? This will mark it as cancelled.")) return;
+    setCancellingOrder(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/cancel`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Delete failed");
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setItemsByOrder((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+      loadRevenue();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setCancellingOrder(null);
+    }
+  }
+
   const accentBtn = "bg-orange-500 hover:bg-orange-600 text-white shadow-sm active:translate-y-px transition";
 
   return (
@@ -261,9 +293,6 @@ export default function AdminPage() {
         {/* Revenue */}
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-md">
           <h2 className="text-lg font-black text-gray-900">Revenue (monthly)</h2>
-          <p className="mt-1 text-xs text-gray-500">
-            Revenue = paid orders only. Potential = unpaid orders.
-          </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <input
               type="month"
@@ -336,11 +365,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
-                          if (
-                            confirm(
-                              `Mark order ${o.reference} (${money(o.total)}) as paid?`
-                            )
-                          ) {
+                          if (confirm(`Mark order ${o.reference} (${money(o.total)}) as paid?`)) {
                             markPaid(o.id);
                           }
                         }}
@@ -410,6 +435,12 @@ export default function AdminPage() {
               />
               <span>Only stock &lt; 5</span>
             </label>
+            <StockPdfButton
+              loading={stockPdfLoading}
+              onLoadingChange={setStockPdfLoading}
+              onError={setError}
+              accentBtn={accentBtn}
+            />
           </div>
           {stockLoading ? (
             <div className="mt-6 text-gray-500">Loading…</div>
@@ -563,11 +594,7 @@ export default function AdminPage() {
                     return (
                       <tr key={o.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                         <td className="py-2.5 pr-2 text-gray-600 whitespace-nowrap">
-                          {new Date(o.created_at).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
+                          {formatDateDDMMYY(o.created_at)}
                         </td>
                         <td className="py-2.5 pr-2 font-bold text-gray-900">{o.reference}</td>
                         <td className="py-2.5 pr-2 text-gray-600 hidden sm:table-cell max-w-[140px] truncate">
@@ -580,38 +607,13 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="py-2.5 text-right">
-                          <div className="flex flex-wrap justify-end gap-1">
-                            {!o.paid_at && o.status !== "cancelled" && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Mark ${o.reference} as paid?`)) markPaid(o.id);
-                                }}
-                                disabled={payingOrder === o.id || cancellingOrder === o.id}
-                                className={`rounded px-2 py-1 text-xs font-bold text-white disabled:opacity-50 ${accentBtn}`}
-                              >
-                                {payingOrder === o.id ? "…" : "Mark paid"}
-                              </button>
-                            )}
-                            {o.status !== "cancelled" && (
-                              confirmingCancelOrder === o.id ? (
-                                <button
-                                  onClick={() => markCancelled(o.id)}
-                                  disabled={cancellingOrder === o.id}
-                                  className="rounded bg-amber-400 px-2 py-1 text-xs font-bold text-amber-900 disabled:opacity-50"
-                                >
-                                  {cancellingOrder === o.id ? "…" : "Confirm?"}
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => setConfirmingCancelOrder(o.id)}
-                                  disabled={payingOrder === o.id || cancellingOrder === o.id}
-                                  className="rounded border border-gray-300 px-2 py-1 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                                >
-                                  Cancel
-                                </button>
-                              )
-                            )}
-                          </div>
+                          <button
+                            onClick={() => deleteOrder(o.id)}
+                            disabled={cancellingOrder === o.id}
+                            className="rounded border border-red-200 px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {cancellingOrder === o.id ? "…" : "Delete"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -653,8 +655,11 @@ function PdfDownloadButton({
   async function handleDownload() {
     onLoadingChange(true);
     try {
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Download failed");
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t?.slice(0, 100) || "Download failed");
+      }
       const ct = res.headers.get("content-type") ?? "";
       if (!ct.includes("application/pdf")) {
         const text = await res.text();
@@ -675,42 +680,69 @@ function PdfDownloadButton({
     }
   }
 
-  async function handleOpenInTab() {
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={loading}
+      className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition disabled:opacity-60 ${accentBtn}`}
+    >
+      {loading ? "…" : "Download PDF"}
+    </button>
+  );
+}
+
+function StockPdfButton({
+  loading,
+  onLoadingChange,
+  onError,
+  accentBtn,
+}: {
+  loading: boolean;
+  onLoadingChange: (v: boolean) => void;
+  onError: (msg: string) => void;
+  accentBtn: string;
+}) {
+  const url = "/api/admin/stock-pdf";
+  const filename = `Stock (${new Date().toISOString().slice(0, 10)}).pdf`;
+
+  async function handleDownload() {
     onLoadingChange(true);
     try {
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load PDF");
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t?.slice(0, 100) || "Download failed");
+      }
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("application/pdf")) {
+        const text = await res.text();
+        throw new Error(text?.slice(0, 200) || "Invalid response");
+      }
       const buf = await res.arrayBuffer();
       const blob = new Blob([buf], { type: "application/pdf" });
       const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener");
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Could not open PDF");
+      onError(e instanceof Error ? e.message : "Stock PDF download failed");
     } finally {
       onLoadingChange(false);
     }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={loading}
-        className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition disabled:opacity-60 ${accentBtn}`}
-      >
-        {loading ? "…" : "Download PDF"}
-      </button>
-      <button
-        type="button"
-        onClick={handleOpenInTab}
-        disabled={loading}
-        className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition disabled:opacity-60"
-      >
-        {loading ? "…" : "Open in tab"}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={loading}
+      className={`rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm hover:opacity-90 transition disabled:opacity-60 ${accentBtn}`}
+    >
+      {loading ? "…" : "Download stock PDF"}
+    </button>
   );
 }
 
