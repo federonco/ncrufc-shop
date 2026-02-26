@@ -55,6 +55,99 @@ function clampQty(n: number) {
   return Math.max(1, Math.min(99, Math.floor(n)));
 }
 
+function ProductImageCarousel({
+  images,
+  imageAlt,
+  name,
+  updatedAt,
+  onImageClick,
+}: {
+  images: string[];
+  imageAlt?: string | null;
+  name: string;
+  updatedAt?: string | null;
+  onImageClick?: (url: string, alt: string) => void;
+}) {
+  const version = updatedAt ? new Date(updatedAt).getTime() : undefined;
+  const hasImages = images.length > 0;
+
+  if (!hasImages) {
+    return (
+      <div className="relative w-full aspect-square bg-gray-200 rounded-t-xl sm:rounded-t-2xl grid place-items-center">
+        <span className="text-2xl font-extrabold text-gray-400">{initials(name)}</span>
+      </div>
+    );
+  }
+
+  if (images.length === 1) {
+    const url = getProductImageUrl(images[0]!, version);
+    if (!url) {
+      return (
+        <div className="relative w-full aspect-square bg-gray-200 rounded-t-xl sm:rounded-t-2xl grid place-items-center">
+          <span className="text-2xl font-extrabold text-gray-400">{initials(name)}</span>
+        </div>
+      );
+    }
+    return (
+      <ProductImage
+        imagePath={images[0]}
+        imageAlt={imageAlt}
+        name={name}
+        updatedAt={updatedAt}
+        variant="card"
+        onClick={onImageClick ? () => onImageClick(url, imageAlt?.trim() || name) : undefined}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "relative w-full aspect-square overflow-x-auto overflow-y-hidden rounded-t-xl sm:rounded-t-2xl",
+        "snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+      ].join(" ")}
+      role="region"
+      aria-label={`${name} images`}
+    >
+      <div className="flex h-full w-max">
+        {images.map((path, i) => {
+          const url = getProductImageUrl(path, version);
+          if (!url) return null;
+          return (
+            <div
+              key={`${path}-${i}`}
+              className="relative shrink-0 w-full aspect-square snap-center snap-always"
+              style={{ minWidth: "100%" }}
+            >
+              <div
+                className={[
+                  "relative w-full h-full overflow-hidden bg-gray-100 cursor-pointer",
+                  "hover:opacity-95 transition-opacity",
+                ].join(" ")}
+                onClick={() => onImageClick?.(url, imageAlt?.trim() || name)}
+                onKeyDown={(e) => e.key === "Enter" && onImageClick?.(url, imageAlt?.trim() || name)}
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${name} image ${i + 1} of ${images.length}`}
+              >
+                <Image
+                  src={url}
+                  alt={`${imageAlt?.trim() || name} (${i + 1}/${images.length})`}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 50vw"
+                  className="object-cover"
+                  loading={i === 0 ? "lazy" : "lazy"}
+                  decoding="async"
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ProductImage({
   imagePath,
   imageAlt,
@@ -80,7 +173,7 @@ function ProductImage({
   if (!url) {
     if (isCard) {
       return (
-        <div className="relative w-full aspect-[4/5] bg-gray-200 rounded-t-xl sm:rounded-t-2xl grid place-items-center">
+        <div className="relative w-full aspect-square bg-gray-200 rounded-t-xl sm:rounded-t-2xl grid place-items-center">
           <span className="text-2xl font-extrabold text-gray-400">{initials(name)}</span>
         </div>
       );
@@ -99,7 +192,7 @@ function ProductImage({
     return (
       <div
         className={[
-          "relative w-full aspect-[4/5] overflow-hidden bg-gray-100",
+          "relative w-full aspect-square overflow-hidden bg-gray-100",
           "rounded-t-xl sm:rounded-t-2xl",
           onClick ? "cursor-pointer hover:opacity-95 transition-opacity" : "",
         ].join(" ")}
@@ -454,14 +547,14 @@ export default function ShopPage() {
             </div>
           </div>
 
-          {/* Categories: mobile scroll + desktop wrap. (No arrows) */}
+          {/* Categories: mobile scroll + desktop wrap */}
           <div className="pb-3">
             <div
               ref={catRowRef}
               className={[
                 "-mx-1 flex gap-2 px-1",
-                "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-                "md:flex-wrap md:overflow-visible",
+                "overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                "md:flex-wrap md:overflow-visible md:snap-none",
               ].join(" ")}
             >
               {categories.map((c) => {
@@ -471,10 +564,12 @@ export default function ShopPage() {
                     key={c}
                     onClick={() => setActiveCategory(c)}
                     className={[
-                      "min-h-[44px] whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold transition",
+                      "snap-start shrink-0 min-h-[44px] whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold",
+                      "transition-all duration-200 ease-out",
+                      "hover:scale-105 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2",
                       active
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-800 border border-gray-200 hover:bg-gray-50",
+                        ? "bg-orange-500 text-white shadow-md shadow-orange-200/50 ring-2 ring-orange-400/30"
+                        : "bg-white/90 text-gray-700 border border-orange-100 hover:border-orange-200 hover:bg-orange-50/80",
                     ].join(" ")}
                   >
                     {c}
@@ -495,7 +590,7 @@ export default function ShopPage() {
                 key={i}
                 className="animate-pulse rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
               >
-                <div className="aspect-[4/5] bg-gray-200" />
+                <div className="aspect-square bg-gray-200" />
                 <div className="p-4 space-y-3">
                   <div className="h-3 w-1/4 rounded bg-gray-100" />
                   <div className="h-4 w-3/4 rounded bg-gray-100" />
@@ -545,25 +640,13 @@ export default function ShopPage() {
                   key={p.id}
                   className="flex flex-col rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md active:shadow-sm overflow-hidden"
                 >
-                  {/* Image */}
-                  <ProductImage
-                    imagePath={p.image_path}
+                  {/* Image (carousel when multiple) */}
+                  <ProductImageCarousel
+                    images={p.images ?? (p.image_path ? [p.image_path] : [])}
                     imageAlt={p.image_alt}
                     name={p.name}
                     updatedAt={p.updated_at}
-                    variant="card"
-                    onClick={
-                      p.image_path
-                        ? () =>
-                            setImageModal({
-                              url: getProductImageUrl(
-                                p.image_path!,
-                                p.updated_at ? new Date(p.updated_at).getTime() : undefined
-                              )!,
-                              alt: p.image_alt?.trim() || p.name,
-                            })
-                        : undefined
-                    }
+                    onImageClick={(url, alt) => setImageModal({ url, alt })}
                   />
 
                   {/* Content */}
