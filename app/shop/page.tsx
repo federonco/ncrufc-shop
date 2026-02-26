@@ -100,24 +100,33 @@ function ProductImageCarousel({
     );
   }
 
+  const n = images.length;
+  const slideWidthPercent = n > 0 ? 100 / n : 100;
+  const trackWidthPercent = n * 100;
+
   return (
     <div
-      className={[
-        "relative w-full aspect-square overflow-x-auto overflow-y-hidden rounded-t-xl sm:rounded-t-2xl",
-        "snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-      ].join(" ")}
+      className="relative w-full overflow-hidden rounded-t-xl sm:rounded-t-2xl bg-gray-100"
+      style={{ aspectRatio: "1 / 1" }}
       role="region"
       aria-label={`${name} images`}
     >
-      <div className="flex h-full w-max">
+      <div
+        className="flex h-full overflow-x-auto snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollSnapType: "x mandatory", width: `${trackWidthPercent}%` }}
+      >
         {images.map((path, i) => {
           const url = getProductImageUrl(path, version);
           if (!url) return null;
           return (
             <div
               key={`${path}-${i}`}
-              className="relative shrink-0 w-full aspect-square snap-center snap-always"
-              style={{ minWidth: "100%" }}
+              className="relative shrink-0 snap-center snap-always"
+              style={{
+                flex: `0 0 ${slideWidthPercent}%`,
+                minWidth: `${slideWidthPercent}%`,
+                aspectRatio: "1 / 1",
+              }}
             >
               <div
                 className={[
@@ -128,14 +137,15 @@ function ProductImageCarousel({
                 onKeyDown={(e) => e.key === "Enter" && onImageClick?.(url, imageAlt?.trim() || name)}
                 role="button"
                 tabIndex={0}
-                aria-label={`View ${name} image ${i + 1} of ${images.length}`}
+                aria-label={`View ${name} image ${i + 1} of ${n}`}
               >
                 <Image
                   src={url}
-                  alt={`${imageAlt?.trim() || name} (${i + 1}/${images.length})`}
+                  alt={`${imageAlt?.trim() || name} (${i + 1}/${n})`}
                   fill
-                  sizes="(max-width: 640px) 100vw, 50vw"
+                  sizes="(max-width: 640px) 100vw, 448px"
                   className="object-cover"
+                  style={{ objectFit: "cover" }}
                   loading={i === 0 ? "lazy" : "lazy"}
                   decoding="async"
                 />
@@ -192,10 +202,10 @@ function ProductImage({
     return (
       <div
         className={[
-          "relative w-full aspect-square overflow-hidden bg-gray-100",
-          "rounded-t-xl sm:rounded-t-2xl",
+          "relative w-full overflow-hidden bg-gray-100 rounded-t-xl sm:rounded-t-2xl",
           onClick ? "cursor-pointer hover:opacity-95 transition-opacity" : "",
         ].join(" ")}
+        style={{ aspectRatio: "1 / 1" }}
         onClick={onClick}
         onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
         role={onClick ? "button" : undefined}
@@ -214,6 +224,7 @@ function ProductImage({
           fill
           sizes="(max-width: 640px) 100vw, 448px"
           className="object-cover"
+          style={{ objectFit: "cover" }}
           loading="lazy"
           decoding="async"
           onLoad={() => setLoaded(true)}
@@ -383,12 +394,20 @@ export default function ShopPage() {
 
       const prodRows = (pRes.data ?? []) as Product[];
       const varRows = (vRes.data ?? []) as Variant[];
+      const productIds = prodRows.map((p) => p.id);
 
-      const { data: imagesRows } = await supabase
-        .from("product_images")
-        .select("product_id, path, sort_order")
-        .in("product_id", prodRows.map((p) => p.id))
-        .order("sort_order", { ascending: true });
+      let imagesRows: { product_id: string; path: string; sort_order: number }[] | null = null;
+      if (productIds.length > 0) {
+        const res = await supabase
+          .from("product_images")
+          .select("product_id, path, sort_order")
+          .in("product_id", productIds)
+          .order("sort_order", { ascending: true });
+        imagesRows = res.data;
+        if (res.error) {
+          console.warn("[Shop] product_images fetch error:", res.error.message);
+        }
+      }
 
       const imagesByProduct = new Map<string, string[]>();
       for (const img of imagesRows ?? []) {
