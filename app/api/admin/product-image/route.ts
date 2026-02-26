@@ -136,6 +136,13 @@ export async function DELETE(req: Request) {
 
     if (deleteErr) throw deleteErr;
 
+    // Also clear products.image_path when it matches (legacy single-image products)
+    await sb
+      .from("products")
+      .update({ image_path: null })
+      .eq("id", productId)
+      .eq("image_path", path);
+
     await sb.storage.from(BUCKET).remove([path]);
 
     return NextResponse.json({ ok: true });

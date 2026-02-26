@@ -61,6 +61,7 @@ function ProductImage({
   name,
   updatedAt,
   size = 48,
+  variant = "thumb",
   onClick,
 }: {
   imagePath: string | null | undefined;
@@ -68,12 +69,22 @@ function ProductImage({
   name: string;
   updatedAt?: string | null;
   size?: number;
+  variant?: "thumb" | "card";
   onClick?: () => void;
 }) {
+  const [loaded, setLoaded] = useState(false);
   const version = updatedAt ? new Date(updatedAt).getTime() : undefined;
   const url = imagePath ? getProductImageUrl(imagePath, version) : null;
+  const isCard = variant === "card";
 
   if (!url) {
+    if (isCard) {
+      return (
+        <div className="relative w-full aspect-[4/5] bg-gray-200 rounded-t-xl sm:rounded-t-2xl grid place-items-center">
+          <span className="text-2xl font-extrabold text-gray-400">{initials(name)}</span>
+        </div>
+      );
+    }
     return (
       <div
         className="shrink-0 grid place-items-center rounded-2xl bg-gray-900 text-sm font-extrabold text-white"
@@ -84,17 +95,39 @@ function ProductImage({
     );
   }
 
-  const content = (
-    <Image
-      src={url}
-      alt={imageAlt?.trim() || name}
-      width={size}
-      height={size}
-      className="object-cover"
-      loading="lazy"
-      decoding="async"
-    />
-  );
+  if (isCard) {
+    return (
+      <div
+        className={[
+          "relative w-full aspect-[4/5] overflow-hidden bg-gray-100",
+          "rounded-t-xl sm:rounded-t-2xl",
+          onClick ? "cursor-pointer hover:opacity-95 transition-opacity" : "",
+        ].join(" ")}
+        onClick={onClick}
+        onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        aria-label={onClick ? `View ${name} image` : undefined}
+      >
+        <div
+          className={`absolute inset-0 bg-gray-200 transition-opacity duration-300 ${
+            loaded ? "opacity-0" : "opacity-100 animate-pulse"
+          }`}
+          aria-hidden
+        />
+        <Image
+          src={url}
+          alt={imageAlt?.trim() || name}
+          fill
+          sizes="(max-width: 640px) 100vw, 448px"
+          className="object-cover"
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -109,7 +142,15 @@ function ProductImage({
       tabIndex={onClick ? 0 : undefined}
       aria-label={onClick ? `View ${name} image` : undefined}
     >
-      {content}
+      <Image
+        src={url}
+        alt={imageAlt?.trim() || name}
+        width={size}
+        height={size}
+        className="object-cover"
+        loading="lazy"
+        decoding="async"
+      />
     </div>
   );
 }
@@ -448,22 +489,27 @@ export default function ShopPage() {
       {/* Content (pb-24 so floating cart doesn't cover last item) */}
       <div className="mx-auto max-w-4xl px-4 py-6 pb-24">
         {loading && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="animate-pulse rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+                className="animate-pulse rounded-xl sm:rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
               >
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-gray-100" />
-                  <div className="flex-1">
-                    <div className="h-4 w-2/3 rounded bg-gray-100" />
-                    <div className="mt-2 h-3 w-1/2 rounded bg-gray-100" />
+                <div className="aspect-[4/5] bg-gray-200" />
+                <div className="p-4 space-y-3">
+                  <div className="h-3 w-1/4 rounded bg-gray-100" />
+                  <div className="h-4 w-3/4 rounded bg-gray-100" />
+                  <div className="h-5 w-1/6 rounded bg-gray-100" />
+                  <div className="h-3 w-full rounded bg-gray-100" />
+                  <div className="h-3 w-2/3 rounded bg-gray-100" />
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <div className="h-10 w-full rounded-xl bg-gray-100" />
+                    <div className="flex gap-2">
+                      <div className="h-10 w-10 rounded-full bg-gray-100" />
+                      <div className="h-10 flex-1 rounded-xl bg-gray-100" />
+                    </div>
                   </div>
                 </div>
-                <div className="mt-5 h-3 w-full rounded bg-gray-100" />
-                <div className="mt-2 h-3 w-5/6 rounded bg-gray-100" />
-                <div className="mt-6 h-10 w-full rounded-2xl bg-gray-100" />
               </div>
             ))}
           </div>
@@ -483,7 +529,7 @@ export default function ShopPage() {
         )}
 
         {!loading && !error && filteredProducts.length > 0 && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
             {filteredProducts.map((p) => {
               const vId = selectedVariant[p.id] || p.variants[0]?.id;
               const chosen = p.variants.find((v) => v.id === vId) ?? p.variants[0];
@@ -492,64 +538,65 @@ export default function ShopPage() {
               const justAdded = key ? addedKey === key : false;
 
               const qty = clampQty(qtyByProduct[p.id] ?? 1);
+              const lineTotal = chosen ? chosen.price * qty : fromPrice * qty;
 
               return (
-                <div
+                <article
                   key={p.id}
-                  className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  className="flex flex-col rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md active:shadow-sm overflow-hidden"
                 >
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <ProductImage
-                        imagePath={p.image_path}
-                        imageAlt={p.image_alt}
-                        name={p.name}
-                        updatedAt={p.updated_at}
-                        size={48}
-                        onClick={
-                          p.image_path
-                            ? () =>
-                                setImageModal({
-                                  url: getProductImageUrl(
-                                    p.image_path!,
-                                    p.updated_at ? new Date(p.updated_at).getTime() : undefined
-                                  )!,
-                                  alt: p.image_alt?.trim() || p.name,
-                                })
-                            : undefined
-                        }
-                      />
+                  {/* Image */}
+                  <ProductImage
+                    imagePath={p.image_path}
+                    imageAlt={p.image_alt}
+                    name={p.name}
+                    updatedAt={p.updated_at}
+                    variant="card"
+                    onClick={
+                      p.image_path
+                        ? () =>
+                            setImageModal({
+                              url: getProductImageUrl(
+                                p.image_path!,
+                                p.updated_at ? new Date(p.updated_at).getTime() : undefined
+                              )!,
+                              alt: p.image_alt?.trim() || p.name,
+                            })
+                        : undefined
+                    }
+                  />
 
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-gray-500">
-                          {safeLabel(p.category)}
-                          {p.subcategory ? ` • ${safeLabel(p.subcategory, "")}` : ""}
-                        </div>
-                        <h3 className="mt-0.5 text-lg font-black tracking-tight text-gray-900">
-                          {p.name}
-                        </h3>
-                      </div>
+                  {/* Content */}
+                  <div className="flex flex-col flex-1 p-4 min-h-0">
+                    <div className="text-[11px] font-bold tracking-wide text-gray-500 uppercase">
+                      {safeLabel(p.category)}
+                      {p.subcategory ? ` • ${safeLabel(p.subcategory, "")}` : ""}
+                    </div>
+                    <h3
+                      className="mt-1 text-base font-black tracking-tight text-gray-900 line-clamp-2"
+                      title={p.name}
+                    >
+                      {p.name}
+                    </h3>
+
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-lg font-black text-gray-900">{money(fromPrice)}</span>
+                      <span className="text-xs text-gray-500 font-medium">+</span>
                     </div>
 
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-bold text-gray-700">
-                      {money(fromPrice)}+
-                    </span>
-                  </div>
+                    {p.description && (
+                      <p className="mt-2 text-sm text-gray-600 line-clamp-2">{p.description}</p>
+                    )}
 
-                  {p.description && <p className="mt-3 text-sm text-gray-600">{p.description}</p>}
-
-                  {/* ✅ Always-visible purchase row: Size (dropdown) + Qty + Price + Add */}
-                  <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-                    <div className="grid gap-2 sm:flex sm:items-center sm:gap-2">
-                    {/* Size */}
-                    <div className="min-w-0 sm:min-w-[160px] sm:flex-1">
+                    {/* CTA area */}
+                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
                       <select
                         value={vId}
                         onChange={(e) =>
                           setSelectedVariant((prev) => ({ ...prev, [p.id]: e.target.value }))
                         }
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-extrabold text-gray-900 focus:outline-none focus:ring-4 focus:ring-orange-100 focus:border-orange-200"
+                        aria-label="Select size"
                       >
                         {p.variants.map((v) => (
                           <option key={v.id} value={v.id}>
@@ -557,68 +604,58 @@ export default function ShopPage() {
                           </option>
                         ))}
                       </select>
-                    </div>
 
-                    {/* Row 2 on mobile: Qty + Total + Add */}
-                    <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-2">
-                      {/* Qty */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() =>
-                            setQtyByProduct((prev) => ({
-                              ...prev,
-                              [p.id]: clampQty((prev[p.id] ?? 1) - 1),
-                            }))
-                          }
-                          className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
-                          aria-label="Decrease quantity"
-                        >
-                          −
-                        </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() =>
+                              setQtyByProduct((prev) => ({
+                                ...prev,
+                                [p.id]: clampQty((prev[p.id] ?? 1) - 1),
+                              }))
+                            }
+                            className="h-10 w-10 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition flex items-center justify-center"
+                            aria-label="Decrease quantity"
+                          >
+                            −
+                          </button>
+                          <span className="min-w-[2rem] text-center text-sm font-black text-gray-900">
+                            {qty}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setQtyByProduct((prev) => ({
+                                ...prev,
+                                [p.id]: clampQty((prev[p.id] ?? 1) + 1),
+                              }))
+                            }
+                            className="h-10 w-10 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition flex items-center justify-center"
+                            aria-label="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
 
-                        <div className="min-w-7 text-center text-sm font-black text-gray-900">
-                          {qty}
+                        <div className="text-right min-w-[4.5rem]">
+                          <div className="text-sm font-black text-gray-900">{money(lineTotal)}</div>
+                          <div className="text-[11px] text-gray-500">total</div>
                         </div>
 
                         <button
-                          onClick={() =>
-                            setQtyByProduct((prev) => ({
-                              ...prev,
-                              [p.id]: clampQty((prev[p.id] ?? 1) + 1),
-                            }))
-                          }
-                          className="h-9 w-9 rounded-full border border-gray-200 text-base font-black hover:bg-gray-50 active:translate-y-px transition"
-                          aria-label="Increase quantity"
+                          onClick={() => handleAdd(p)}
+                          className={[
+                            "shrink-0 min-h-[44px] rounded-xl px-4 py-2.5 text-sm font-extrabold text-white transition active:translate-y-px flex-1 min-w-0",
+                            justAdded ? "bg-emerald-600" : accentBtn,
+                          ].join(" ")}
                         >
-                          +
+                          {justAdded ? "✓" : "+ Add"}
                         </button>
                       </div>
 
-                      {/* Total */}
-                      <div className="text-right sm:w-[82px]">
-                        <div className="text-xs font-black text-gray-900 leading-tight">
-                          {chosen ? money(chosen.price * qty) : money(fromPrice * qty)}
-                        </div>
-                        <div className="text-[11px] text-gray-500 leading-tight">total</div>
-                      </div>
-
-                      {/* Add */}
-                      <button
-                        onClick={() => handleAdd(p)}
-                        className={[
-                          "shrink-0 min-h-[44px] rounded-full px-4 py-2 text-sm font-extrabold text-white transition active:translate-y-px",
-                          justAdded ? "bg-emerald-600" : accentBtn,
-                        ].join(" ")}
-                      >
-                        {justAdded ? "✓" : "+ Add"}
-                      </button>
+                      <p className="text-[11px] text-gray-500">Prices include GST</p>
                     </div>
                   </div>
-                    
-
-                    <div className="mt-2 text-xs text-gray-500">Prices include GST</div>
-                  </div>
-                </div>
+                </article>
               );
             })}
           </div>
