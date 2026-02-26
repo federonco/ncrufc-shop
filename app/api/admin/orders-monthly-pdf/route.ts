@@ -24,15 +24,13 @@ function money(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function formatDateLocal(iso: string): string {
+function formatDateDDMMYY(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const d = new Date(iso);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
   } catch {
     return iso;
   }
@@ -90,7 +88,7 @@ export async function GET(req: Request) {
     doc.moveDown(1.5);
 
     const tableTop = doc.y;
-    const colWidths = [95, 65, 90, 110, 55, 45, 50];
+    const colWidths = [55, 65, 90, 110, 55, 45, 50]; // date col narrower for dd/mm/yy
     const headers = ["Date", "Reference", "Customer", "Email", "Total", "Paid?", "Status"];
 
     doc.fontSize(FONT_SIZE).font("Helvetica-Bold");
@@ -107,7 +105,7 @@ export async function GET(req: Request) {
     let y = doc.y;
 
     for (const o of rows) {
-      const dateStr = formatDateLocal(o.created_at);
+      const dateStr = formatDateDDMMYY(o.created_at);
       const paid = o.paid_at ? "Yes" : "No";
       const status = o.status ?? "—";
 

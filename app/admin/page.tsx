@@ -30,6 +30,7 @@ type ProductGroup = {
   subcategory: string | null;
   image_path: string | null;
   image_alt: string | null;
+  images?: string[];
   variants: VariantRow[];
 };
 
@@ -501,6 +502,7 @@ export default function AdminPage() {
                             productId={prod.id}
                             productName={prod.name}
                             imagePath={prod.image_path}
+                            images={prod.images ?? (prod.image_path ? [prod.image_path] : [])}
                             onSuccess={loadStock}
                             onError={setError}
                             compact
@@ -805,6 +807,7 @@ function ProductImageUpload({
   productId,
   productName,
   imagePath,
+  images = [],
   onSuccess,
   onError,
   compact = false,
@@ -812,23 +815,26 @@ function ProductImageUpload({
   productId: string;
   productName: string;
   imagePath: string | null;
+  images?: string[];
   onSuccess: () => void;
   onError: (msg: string) => void;
   compact?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [imageVersion, setImageVersion] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const imageUrl = imagePath ? getProductImageUrl(imagePath, imageVersion ?? undefined) : null;
+  const imgList = images.length > 0 ? images : (imagePath ? [imagePath] : []);
+  const firstUrl = imgList[0] ? getProductImageUrl(imgList[0], imageVersion ?? undefined) : null;
+  const canAdd = imgList.length < 5;
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      onError("File too large. Max 4MB.");
+    if (file.size > 2 * 1024 * 1024) {
+      onError("File too large. Max 2MB. Use WebP for best compression.");
       return;
     }
     const ok = ["image/jpeg", "image/png", "image/webp"].includes(file.type);
@@ -860,15 +866,16 @@ function ProductImageUpload({
     }
   }
 
-  async function handleRemove() {
+  async function handleRemove(path: string) {
     if (!confirm("Remove this image?")) return;
     setMsg(null);
-    setRemoving(true);
+    setRemoving(path);
     try {
-      const res = await fetch(
-        `/api/admin/product-image?product_id=${encodeURIComponent(productId)}`,
-        { method: "DELETE" }
-      );
+      const res = await fetch("/api/admin/product-image", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: productId, path }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Remove failed");
       setMsg("Removed");
@@ -877,7 +884,7 @@ function ProductImageUpload({
     } catch (err) {
       onError(err instanceof Error ? err.message : "Remove failed");
     } finally {
-      setRemoving(false);
+      setRemoving(null);
     }
   }
 
@@ -891,8 +898,8 @@ function ProductImageUpload({
   if (compact) {
     return (
       <div className="relative h-full w-full">
-        {imageUrl ? (
-          <img src={imageUrl} alt={productName} className="h-full w-full object-cover" />
+        {firstUrl ? (
+          <img src={firstUrl} alt={productName} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-2xl font-black text-gray-400">
             {initials(productName)}
@@ -900,25 +907,28 @@ function ProductImageUpload({
         )}
         <div className="absolute bottom-2 left-2 right-2 flex flex-wrap justify-center gap-1.5">
           <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} className="hidden" />
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading || removing}
-            className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow hover:bg-orange-600 disabled:opacity-50"
-          >
-            {uploading ? "…" : imageUrl ? "Replace" : "Upload"}
-          </button>
-          {imageUrl && (
+          {canAdd && (
             <button
               type="button"
-              onClick={handleRemove}
-              disabled={uploading || removing}
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading || !!removing}
+              className="rounded-lg bg-orange-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow hover:bg-orange-600 disabled:opacity-50"
+            >
+              {uploading ? "…" : "Add"}
+            </button>
+          )}
+          {imgList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => handleRemove(imgList[0]!)}
+              disabled={uploading || !!removing}
               className="rounded-lg border border-red-200 bg-white px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               Remove
             </button>
           )}
           {msg && <span className="text-[10px] text-emerald-600">{msg}</span>}
+          {imgList.length > 0 && <span className="text-[10px] text-gray-500">{imgList.length}/5</span>}
         </div>
       </div>
     );
@@ -927,8 +937,8 @@ function ProductImageUpload({
   return (
     <div className="flex shrink-0 flex-col items-center gap-2">
       <div className="relative h-20 w-20 overflow-hidden rounded-xl border-2 border-gray-200 bg-gray-100 shadow-inner">
-        {imageUrl ? (
-          <img src={imageUrl} alt={productName} className="h-full w-full object-cover" />
+        {firstUrl ? (
+          <img src={firstUrl} alt={productName} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-lg font-black text-gray-400">
             {initials(productName)}
@@ -937,19 +947,21 @@ function ProductImageUpload({
       </div>
       <div className="flex flex-wrap justify-center gap-1.5">
         <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} className="hidden" />
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading || removing}
-          className="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition active:translate-y-px"
-        >
-          {uploading ? "…" : imageUrl ? "Replace" : "Upload"}
-        </button>
-        {imageUrl && (
+        {canAdd && (
           <button
             type="button"
-            onClick={handleRemove}
-            disabled={uploading || removing}
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading || !!removing}
+            className="rounded-lg bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 transition active:translate-y-px"
+          >
+            {uploading ? "…" : "Add"}
+          </button>
+        )}
+        {imgList.length > 0 && (
+          <button
+            type="button"
+            onClick={() => handleRemove(imgList[0]!)}
+            disabled={uploading || !!removing}
             className="rounded-lg border border-red-200 bg-white px-2 py-0.5 text-[10px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition"
           >
             Remove
@@ -957,7 +969,7 @@ function ProductImageUpload({
         )}
       </div>
       {msg && <span className="text-[10px] text-emerald-600">{msg}</span>}
-      <span className="text-[9px] text-gray-400">Tip: upload webp for best quality/size</span>
+      <span className="text-[9px] text-gray-400">Up to 5 images. WebP &lt;2MB recommended.</span>
     </div>
   );
 }

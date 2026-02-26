@@ -81,8 +81,8 @@ export async function GET() {
       );
     doc.moveDown(1);
 
-    const colWidths = [100, 45, 55, 45, 55, 50];
-    const headers = ["Product", "Size", "SKU", "Stock", "Price", "Revenue"];
+    const colWidths = [130, 45, 55, 45, 55]; // Product, Size, SKU, Stock, Price
+    const headers = ["Product", "Size", "SKU", "Stock", "Price"];
 
     doc.fontSize(FONT_SIZE).font("Helvetica-Bold");
     let x = MARGIN;
@@ -100,25 +100,20 @@ export async function GET() {
 
     for (const v of flat) {
       x = MARGIN;
-      doc.text((v.product_name ?? "—").slice(0, 30), x, y, {
+      doc.text((v.product_name ?? "—").trim().slice(0, 28), x, y, {
         width: colWidths[0],
         ellipsis: true,
       });
       x += colWidths[0];
-      doc.text(v.size ?? "—", x, y, { width: colWidths[1], ellipsis: true });
+      doc.text((v.size ?? "—").toString().slice(0, 8), x, y, { width: colWidths[1], ellipsis: true });
       x += colWidths[1];
       doc.font("Helvetica").fontSize(FONT_SIZE - 1);
-      doc.text((v.sku ?? "—").slice(0, 12), x, y, {
-        width: colWidths[2],
-        ellipsis: true,
-      });
+      doc.text((v.sku ?? "—").slice(0, 12), x, y, { width: colWidths[2], ellipsis: true });
       doc.font("Helvetica").fontSize(FONT_SIZE);
       x += colWidths[2];
       doc.text(String(v.stock ?? 0), x, y, { width: colWidths[3] });
       x += colWidths[3];
       doc.text(money(v.price), x, y, { width: colWidths[4] });
-      x += colWidths[4];
-      doc.text("—", x, y, { width: colWidths[5] }); // Revenue: not available per variant
 
       y += ROW_HEIGHT;
       doc.y = y;
@@ -135,7 +130,7 @@ export async function GET() {
     doc.moveTo(MARGIN, doc.y).lineTo(595 - MARGIN, doc.y).stroke();
     doc.moveDown(0.3);
     doc.font("Helvetica-Bold");
-    doc.text(`Total variants: ${flat.length}`, MARGIN, doc.y);
+    doc.text(`Total Items: ${flat.length}`, MARGIN, doc.y);
 
     const pdf = await new Promise<Buffer>((resolve, reject) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));

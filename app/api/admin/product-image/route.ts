@@ -6,9 +6,10 @@ import { getProductImageUrl } from "@/lib/product-image";
 
 const BUCKET = "product-images";
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+const MAX_IMAGES_PER_PRODUCT = 5;
 
-/** POST: Upload product image. Body: multipart/form-data with product_id + file */
+/** POST: Upload product image. Body: multipart/form-data with product_id + file. Up to 5 images per product. */
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -24,35 +25,36 @@ export async function POST(req: Request) {
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: "Invalid file type. Use JPEG, PNG, or WebP. Max 4MB." },
+        { error: "Invalid file type. Use JPEG, PNG, or WebP. Max 2MB." },
         { status: 400 }
       );
     }
     if (file.size > MAX_SIZE_BYTES) {
       return NextResponse.json(
-        { error: "File too large. Max 4MB." },
+        { error: "File too large. Max 2MB. Use WebP for best compression." },
+        { status: 400 }
+      );
+    }
+
+    const sb = supabaseServer();
+
+    const { data: existing } = await sb
+      .from("product_images")
+      .select("id")
+      .eq("product_id", productId);
+
+    const count = (existing ?? []).length;
+    if (count >= MAX_IMAGES_PER_PRODUCT) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_IMAGES_PER_PRODUCT} images per product. Remove one first.` },
         { status: 400 }
       );
     }
 
     const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
     const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? (ext === "jpeg" ? "jpg" : ext) : "jpg";
-    const storagePath = `products/${productId}/main.${safeExt}`;
+    const storagePath = `products/${productId}/img_${count}.${safeExt}`;
 
-    const sb = supabaseServer();
-
-    const { data: existing } = await sb
-      .from("products")
-      .select("image_path")
-      .eq("id", productId)
-      .single();
-
-    const oldPath = (existing as { image_path?: string | null } | null)?.image_path;
-    if (oldPath && oldPath !== storagePath) {
-      await sb.storage.from(BUCKET).remove([oldPath]);
-    }
-
-    const imageAlt = formData.get("image_alt")?.toString()?.trim() || null;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadErr } = await sb.storage
@@ -70,21 +72,15 @@ export async function POST(req: Request) {
       );
     }
 
-    const updates: { image_path: string; image_alt: string | null } = {
-      image_path: storagePath,
-      image_alt: imageAlt,
-    };
+    const { error: insertErr } = await sb
+      .from("product_images")
+      .insert({ product_id: productId, path: storagePath, sort_order: count });
 
-    const { error: updateErr } = await sb
-      .from("products")
-      .update(updates)
-      .eq("id", productId);
-
-    if (updateErr) {
-      console.error("Products update error:", updateErr);
+    if (insertErr) {
+      console.error("product_images insert error:", insertErr);
       await sb.storage.from(BUCKET).remove([storagePath]);
       return NextResponse.json(
-        { error: updateErr.message ?? "Failed to update product" },
+        { error: insertErr.message ?? "Failed to save image record" },
         { status: 500 }
       );
     }
@@ -104,46 +100,43 @@ export async function POST(req: Request) {
   }
 }
 
-/** DELETE: Remove product image. Query: product_id or JSON body: { product_id } */
+/** DELETE: Remove product image. Query: product_id + path, or JSON body: { product_id, path } */
 export async function DELETE(req: Request) {
   try {
     let productId: string | null = null;
+    let path: string | null = null;
     try {
       const body = await req.json().catch(() => null);
-      productId = (body as { product_id?: string } | null)?.product_id?.trim() ?? null;
+      const b = body as { product_id?: string; path?: string } | null;
+      productId = b?.product_id?.trim() ?? null;
+      path = b?.path?.trim() ?? null;
     } catch {
       /* no body */
     }
-    if (!productId) {
+    if (!productId || !path) {
       const { searchParams } = new URL(req.url);
-      productId = searchParams.get("product_id")?.trim() ?? null;
+      productId = productId ?? searchParams.get("product_id")?.trim() ?? null;
+      path = path ?? searchParams.get("path")?.trim() ?? null;
     }
 
     if (!productId) {
       return NextResponse.json({ error: "product_id required" }, { status: 400 });
     }
+    if (!path) {
+      return NextResponse.json({ error: "path required (image to remove)" }, { status: 400 });
+    }
 
     const sb = supabaseServer();
 
-    const { data: product, error: fetchErr } = await sb
-      .from("products")
-      .select("image_path")
-      .eq("id", productId)
-      .single();
+    const { error: deleteErr } = await sb
+      .from("product_images")
+      .delete()
+      .eq("product_id", productId)
+      .eq("path", path);
 
-    if (fetchErr) throw fetchErr;
-    const path = product?.image_path;
+    if (deleteErr) throw deleteErr;
 
-    if (path) {
-      await sb.storage.from(BUCKET).remove([path]);
-    }
-
-    const { error: updateErr } = await sb
-      .from("products")
-      .update({ image_path: null, image_alt: null })
-      .eq("id", productId);
-
-    if (updateErr) throw updateErr;
+    await sb.storage.from(BUCKET).remove([path]);
 
     return NextResponse.json({ ok: true });
   } catch (e) {

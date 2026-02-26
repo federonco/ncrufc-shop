@@ -17,6 +17,7 @@ type Product = {
   active: boolean;
   image_path: string | null;
   image_alt: string | null;
+  images?: string[];
   updated_at?: string | null;
 };
 
@@ -249,6 +250,19 @@ export default function ShopPage() {
       const prodRows = (pRes.data ?? []) as Product[];
       const varRows = (vRes.data ?? []) as Variant[];
 
+      const { data: imagesRows } = await supabase
+        .from("product_images")
+        .select("product_id, path, sort_order")
+        .in("product_id", prodRows.map((p) => p.id))
+        .order("sort_order", { ascending: true });
+
+      const imagesByProduct = new Map<string, string[]>();
+      for (const img of imagesRows ?? []) {
+        const arr = imagesByProduct.get(img.product_id) ?? [];
+        arr.push(img.path);
+        imagesByProduct.set(img.product_id, arr);
+      }
+
       const byProductId = new Map<string, Variant[]>();
       for (const v of varRows) {
         const arr = byProductId.get(v.product_id) ?? [];
@@ -257,7 +271,16 @@ export default function ShopPage() {
       }
 
       const joined: ProductWithVariants[] = prodRows
-        .map((p) => ({ ...p, variants: byProductId.get(p.id) ?? [] }))
+        .map((p) => {
+          const imgs = imagesByProduct.get(p.id);
+          const imagePath = imgs?.[0] ?? p.image_path;
+          return {
+            ...p,
+            image_path: imagePath,
+            images: imgs ?? (p.image_path ? [p.image_path] : []),
+            variants: byProductId.get(p.id) ?? [],
+          };
+        })
         .filter((p) => p.variants.length > 0);
 
       // defaults
@@ -786,7 +809,7 @@ function CartContent(props: {
       )}
 
       {previewUrl && (
-        <div className="shrink-0 relative h-[min(35dvh,140px)] bg-gray-100">
+        <div className="shrink-0 relative h-[min(25dvh,100px)] bg-gray-100">
           <Image
             src={previewUrl}
             alt={previewItem?.image_alt?.trim() || previewItem?.name || "Product"}
@@ -815,7 +838,8 @@ function CartContent(props: {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 shrink overflow-y-auto overflow-x-hidden px-4 py-3 overscroll-contain [-webkit-overflow-scrolling:touch]">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]">
+        <div className="px-4 py-3 space-y-4">
         {items.length === 0 ? (
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-5 text-gray-700">
             Empty cart. Add items from the shop.
@@ -867,9 +891,8 @@ function CartContent(props: {
             ))}
           </div>
         )}
-      </div>
 
-      <div className="shrink-0 border-t px-4 py-4">
+        <div className="border-t border-gray-100 pt-4">
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Subtotal (GST incl.)</span>
@@ -944,18 +967,11 @@ function CartContent(props: {
               >
                 {isPlacing ? "Placing order..." : "Place order"}
               </button>
-              <button
-                onClick={() => {
-                  if (confirm("Clear the whole cart?")) onClear();
-                }}
-                disabled={items.length === 0 || isPlacing}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-700 disabled:opacity-50"
-              >
-                Clear cart
-              </button>
             </div>
           </>
         )}
+        </div>
+        </div>
       </div>
     </div>
   );

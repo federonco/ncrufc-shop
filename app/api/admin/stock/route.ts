@@ -58,6 +58,7 @@ export async function GET(req: Request) {
         subcategory: string | null;
         image_path: string | null;
         image_alt: string | null;
+        images?: string[];
         variants: { id: string; sku: string; size: string | null; price: number; stock: number }[];
       }[];
     };
@@ -96,6 +97,20 @@ export async function GET(req: Request) {
       });
     }
 
+    const productIds = [...new Set(Array.from(byCategory.values()).flatMap((prods) => prods.map((p) => p.id)))];
+    const { data: imagesRows } = await sb
+      .from("product_images")
+      .select("product_id, path, sort_order")
+      .in("product_id", productIds)
+      .order("sort_order", { ascending: true });
+
+    const imagesByProduct = new Map<string, string[]>();
+    for (const img of imagesRows ?? []) {
+      const arr = imagesByProduct.get(img.product_id) ?? [];
+      arr.push(img.path);
+      imagesByProduct.set(img.product_id, arr);
+    }
+
     const grouped: Grouped[] = Array.from(byCategory.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([category, products]) => {
@@ -104,6 +119,9 @@ export async function GET(req: Request) {
         );
         sorted.forEach((p) => {
           p.variants.sort((a, b) => (a.size ?? "").localeCompare(b.size ?? ""));
+          const imgs = imagesByProduct.get(p.id);
+          p.image_path = imgs?.[0] ?? p.image_path;
+          (p as { images?: string[] }).images = imgs ?? (p.image_path ? [p.image_path] : []);
         });
         return { category, products: sorted };
       });

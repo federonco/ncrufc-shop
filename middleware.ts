@@ -113,6 +113,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname === "/admin/login") {
+    return NextResponse.next();
+  }
+  if (pathname === "/api/admin/login" && request.method === "POST") {
+    return NextResponse.next();
+  }
+
   const useSessionCookie = Boolean(process.env.ADMIN_SESSION_SECRET);
   const cookieValue = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
 
@@ -127,6 +134,9 @@ export async function middleware(request: NextRequest) {
   const credentials = decodeBasicAuth(authHeader);
 
   if (!credentials) {
+    if (useSessionCookie && (pathname === "/admin" || pathname.startsWith("/admin/") && pathname !== "/admin/login")) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
     return new NextResponse("Authentication required", {
       status: 401,
       headers: {
